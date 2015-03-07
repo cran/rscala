@@ -400,15 +400,34 @@ rscalaJar <- function(version="") {
 
 javaCmd <- function(java.home=NULL) {
   if ( is.null(java.home) ) java.home <- ""
-  candidate <- normalizePath(file.path(java.home,"bin","java"),mustWork=FALSE)
+  candidate <- normalizePath(file.path(java.home,"bin",sprintf("java%s",ifelse(.Platform$OS=="windows",".exe",""))),mustWork=FALSE)
   if ( file.exists(candidate) ) return(candidate)
   candidate <- normalizePath(Sys.getenv("JAVACMD"),mustWork=FALSE)
   if ( file.exists(candidate) ) return(candidate)
-  candidate <- normalizePath(file.path(Sys.getenv("JAVA_HOME"),"bin","java"),mustWork=FALSE)
+  candidate <- normalizePath(file.path(Sys.getenv("JAVA_HOME"),"bin",sprintf("java%s",ifelse(.Platform$OS=="windows",".exe",""))),mustWork=FALSE)
   if ( file.exists(candidate) ) return(candidate)
   candidate <- normalizePath(Sys.which("java"),mustWork=FALSE)
   if ( file.exists(candidate) ) return(candidate)
-  stop("Cannot find Java executable.  Please set 'java.home' argument, set 'JAVACMD' or 'JAVA_HOME' environment variables, or add 'java' to your shell's search path.")
+  if ( .Platform$OS == "windows" ) {
+    readRegistryKey <- function(key.name,value.name) {
+      v <- suppressWarnings(system2("reg",c("query",shQuote(key.name),"/v",value.name),stdout=TRUE))
+      a <- attr(v,"status")
+      if ( (!is.null(a)) && ( a != 0 ) ) return(NULL)
+      vv <- v[grep(value.name,v)[1]]
+      gsub("(^[[:space:]]+|[[:space:]]+$)", "",strsplit(vv,"REG_SZ")[[1]][2])
+    }
+    java.key <- "HKEY_LOCAL_MACHINE\\Software\\JavaSoft\\Java Runtime Environment"
+    java.version <- readRegistryKey(java.key,"CurrentVersion")
+    java.home <- readRegistryKey(sprintf("%s\\%s",java.key,java.version),"JavaHome")
+    if ( ! is.null(java.home) ) {
+      candidate <- normalizePath(file.path(java.home,"bin",sprintf("java%s",ifelse(.Platform$OS=="windows",".exe",""))),mustWork=FALSE)
+      if ( file.exists(candidate) ) return(candidate)
+    }
+  }
+  msg <- sprintf("Cannot find Java executable.  Please set 'java.home' argument, set 'JAVACMD' or 'JAVA_HOME' environment variables, %sadd 'java' to your shell's search path%s.",
+    ifelse(.Platform$OS=="windows","","or "),
+    ifelse(.Platform$OS=="windows",", or set the appropriate Windows registry keys for your Java installation",""))
+  stop(msg)
 }
 
 scalaCmd <- function(scala.home=NULL) {
@@ -440,7 +459,7 @@ scalaInfo <- function(scala.home=NULL) {
       system2(cmd,c("-e",shQuote("print(util.Properties.versionNumberString)")),stdout=TRUE,stderr=FALSE)
     ,error=function(e) {})
   )
-  if ( ( is.null(version) ) || ( length(version) != 1 ) ) stop(sprintf("Unexpected version from Scala executable (%s): %s.",cmd,version))
+  if ( ( is.null(version) ) || ( length(version) != 1 ) ) stop(sprintf("Unable to launch Scala executable (%s).  Perhaps your JAVACMD, JAVA_HOME, or PATH environment variables is not properly set.",cmd))
   major.version = substr(version,1,4)
   if ( ! ( major.version %in% c("2.10","2.11") ) ) stop(sprintf("Unsuported major version from Scala executable (%s): %s.",cmd,major.version))
   list(cmd=cmd,home=home,version=version,major.version=major.version,jars=jars)

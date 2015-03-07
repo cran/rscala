@@ -24,7 +24,7 @@ Execute code, set values, and get values in an embedded interpreter.
 \description{
 These functions define the package's interface to an embedded interpreter.
 Through these functions, code is executed in the embedded interpreter and data
-is passed between R and the embedded interpreter.  Some of these functions
+is passed between \R and the embedded interpreter.  Some of these functions
 return a function for invoking a function in the interpreter.  Others return a
 reference to the result or attempt to return an \R object representing the
 result.  Some functions also provide the ability to clear variables or reclaim
