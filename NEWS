@@ -1,6 +1,10 @@
+1.0.2 (20xx-xx-xx)
+  * On Windows, if all else fails, try to find the Java installation using the Windows registry.
+  * Facilitate other packages depending on 'rscala' by explicitly importing 'util' package needed for 'download.file' function.
+
 1.0.1 (2015-03-05)
-  * Initial release to CRAN
+  * Initial release to CRAN.
 
 1.0.0 (2015-03-03)
-  * Release to beta testers
+  * Release to beta testers.
 

@@ -26,7 +26,7 @@ rscalaJar(version="")
 }
 \arguments{
     \item{classpath}{A character vector whose elements are paths to JAR files or directories which specify the classpath for the Scala compiler/interpreter.}
-    \item{scala.home}{A character vector of length one giving the path where Scala is installed.  When set to \code{NULL} (the default), the function sequentially tries to find the Scala home by:  i. using the environment variable \code{SCALA_HOME}, ii. querying the operating system search path, and iii. looking in \code{~/.rscala/scala-X} where \code{X} is the recommended Scala version number (e.g., 2.11.5) for the package.  If all these fail, the function offers to download and install Scala in the above mentioned path (if the current R session is interactive) or it downloads and installs Scala in a temporary directory (if the current \R session is noninteractive).}
+    \item{scala.home}{A character vector of length one giving the path where Scala is installed.  When set to \code{NULL} (the default), the function sequentially tries to find the Scala home by:  i. using the environment variable \code{SCALA_HOME}, ii. querying the operating system search path, and iii. looking in \code{~/.rscala/scala-X} where \code{X} is the recommended Scala version number (e.g., 2.11.5) for the package.  If all these fail, the function offers to download and install Scala in the above mentioned path (if the current \R session is interactive) or it downloads and installs Scala in a temporary directory (if the current \R session is noninteractive).}
     \item{java.home}{A character vector of length one giving the path where Java is installed.  When set to \code{NULL} (the default), the function sequentially tries to find the Java home by:  i. using the environment variable \code{JAVACMD}, ii. using the environment variable \code{JAVA_HOME}, and iii. querying the operating system search path.}
     \item{java.heap.maximum}{A character vector of length one used to specify the maximum heap size in the JVM.  The default is \sQuote{256M} which is equivalent to invoking Java with command line argument \sQuote{-Xmx256M}.  This option is ignored if \var{java.opts} is not null.}
     \item{java.opts}{A character vector whose elements are passed as command line arguments when invoking the JVM.  The default value is \code{NULL}, meaning no extra arguments are provided.}
@@ -34,7 +34,7 @@ rscalaJar(version="")
     \item{version}{If \code{""}, the package JAR files for all Scala versions are returned. Or, if \code{"2.10.*"} or \code{"2.11.*"} where \code{*} is a placeholder, the JAR file for that specific major version of Scala is returned.}
 }
 \value{
-    \code{\link{scalaInterpreter}} returns an R object representing an embedded Scala interpreter.
+    \code{\link{scalaInterpreter}} returns an \R object representing an embedded Scala interpreter.
 
     \code{\link{javaCmd}} returns the path of the Java executable.
 
