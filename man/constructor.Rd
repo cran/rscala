@@ -3,35 +3,58 @@
 \alias{javaCmd}
 \alias{scalaInfo}
 \alias{rscalaJar}
+\alias{rscalaPackage}
+\alias{rscalaLoad}
 \docType{methods}
 \title{
 Creates an instance of an embedded Scala compiler/interpreter.
 Provides file paths for Java, Scala, and this package's JAR file.
+Provides functions to enable other packages to depend on this package.
 }
 \description{
 The function \code{\link{scalaInterpreter}} creates an instance of an embedded
 Scala compiler/interpreter and binds a Scala object named \code{R} to permit
 callbacks to \R.  Options are available to customize where \R and Scala are
 found and how they are invoked (e.g., setting the classpath and maximum heap
-size).  The other functions provide file paths to JAR files, installation
+size).
+
+The functions \code{\link{javaCmd}}, \code{\link{scalaInfo}}, and
+\code{\link{rscalaJar}} provide file paths to JAR files, installation
 directories, and executables for Java, Scala, and this package.
+
+The function \code{\link{rscalaPackage}} should only be called by the
+\code{\link[base]{.onLoad}} function of a package that wishes to depend on this
+package.  The function creates two variables \code{s} and \code{jars} in that
+package's namespace which are globally available in any of that package's
+functions.  The \code{jars} variable is a character vector giving the full path
+of all the JAR files in the \sQuote{java} directory of that package.  The
+\code{s} variable is initially \code{NULL} but, once the
+\code{\link{rscalaLoad}} function is called (probably outside that packages's
+\code{\link[base]{.onLoad}} function), it contains an instance of an
+embedded Scala compiler/interpreter.  Like \code{\link{rscalaPackage}},
+\code{\link{rscalaLoad}} should only be called by a package that wishes to
+depend on this package.
 }
 \usage{
 scalaInterpreter(classpath=character(0),
     scala.home=NULL, java.home=NULL, java.heap.maximum="256M", java.opts=NULL,
     debug.filename=NULL)
 javaCmd(java.home=NULL)
-scalaInfo(scala.home=NULL)
+scalaInfo(scala.home=NULL, java.home=NULL, ...)
 rscalaJar(version="")
+rscalaPackage(pkgname)
+rscalaLoad(classpath=NULL, ...)
 }
 \arguments{
-    \item{classpath}{A character vector whose elements are paths to JAR files or directories which specify the classpath for the Scala compiler/interpreter.}
+    \item{classpath}{A character vector whose elements are paths to JAR files or directories which specify the classpath for the Scala compiler/interpreter.  If left equal to \code{NULL} in the function \code{link{rscalaLoad}}, the package-global variable \code{jars} --- which is set by an earlier call to the function \code{\link{rscalaPackage}} --- is used.}
     \item{scala.home}{A character vector of length one giving the path where Scala is installed.  When set to \code{NULL} (the default), the function sequentially tries to find the Scala home by:  i. using the environment variable \code{SCALA_HOME}, ii. querying the operating system search path, and iii. looking in \code{~/.rscala/scala-X} where \code{X} is the recommended Scala version number (e.g., 2.11.5) for the package.  If all these fail, the function offers to download and install Scala in the above mentioned path (if the current \R session is interactive) or it downloads and installs Scala in a temporary directory (if the current \R session is noninteractive).}
     \item{java.home}{A character vector of length one giving the path where Java is installed.  When set to \code{NULL} (the default), the function sequentially tries to find the Java home by:  i. using the environment variable \code{JAVACMD}, ii. using the environment variable \code{JAVA_HOME}, and iii. querying the operating system search path.}
     \item{java.heap.maximum}{A character vector of length one used to specify the maximum heap size in the JVM.  The default is \sQuote{256M} which is equivalent to invoking Java with command line argument \sQuote{-Xmx256M}.  This option is ignored if \var{java.opts} is not null.}
     \item{java.opts}{A character vector whose elements are passed as command line arguments when invoking the JVM.  The default value is \code{NULL}, meaning no extra arguments are provided.}
     \item{debug.filename}{An option meant only for developers of the package itself and not intended for users of the package.}
     \item{version}{If \code{""}, the package JAR files for all Scala versions are returned. Or, if \code{"2.10.*"} or \code{"2.11.*"} where \code{*} is a placeholder, the JAR file for that specific major version of Scala is returned.}
+    \item{pkgname}{A character string giving the name of the package (as provided the second argument of the \code{\link[base]{.onLoad}} function) that wishes to depend on this package.}
+    \item{...}{In the \code{\link{rscalaLoad}} function, these argument are passed to the \code{\link{scalaInterpreter}} function.  These arguments are currently ignored in the \code{\link{scalaInfo}} function.}
 }
 \value{
     \code{\link{scalaInterpreter}} returns an \R object representing an embedded Scala interpreter.
