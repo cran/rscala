@@ -17,6 +17,7 @@
 %\alias{\%.~\%.ScalaInterpreter}
 \alias{$.ScalaInterpreter}
 \alias{$<-.ScalaInterpreter}
+\alias{scalap}
 \docType{methods}
 \title{
 Execute code, set values, and get values in an embedded interpreter.
@@ -33,11 +34,12 @@ equivalents for many of the functions.
 }
 \usage{
 intpEval(interpreter, snippet, interpolate="", quiet="")
-intpGet(interpreter, identifier, as.reference=FALSE)
+intpGet(interpreter, identifier, as.reference=NA)
 intpSet(interpreter, identifier, value, length.one.as.vector="", quiet="")
-intpDef(interpreter, args, body, interpolate = "", quiet = "")
+intpDef(interpreter, args, body, interpolate = "", quiet = "", reference=NULL)
 intpGC(interpreter)
 intpReset(interpreter)
+scalap(interpreter, item.name)
 
 interpreter \%~\% snippet
 interpreter \%.~\% snippet
@@ -49,13 +51,15 @@ interpreter \%.~\% snippet
     \item{interpreter}{An interpreter from an interpreter constructor (e.g., \code{\link{scalaInterpreter}}).}
     \item{snippet}{A character vector of arbitrary length to be evaluated by the interpreter.}
     \item{args}{A character vector of length one giving the argument list for a function to be defined in the interpreter.  Use \code{""} for a function which takes no arguments.}
-    \item{body}{A character vector of length one giving the body for a function to be defined in the interpreter.  The function body can be a multiline character vector of length one.}
+    \item{body}{A character vector of any length giving the body for a function to be defined in the interpreter.  The function body can be a multiline character vector of length one.}
     \item{identifier}{A character vector of length one containing a valid variable name in the embedded language.}
     \item{value}{Either: i. a vector or matrix of integers, doubles, logicals, or characters, or ii. a reference.}
-    \item{as.reference}{A logical vector of length one indicating whether the result of \code{\link{intpGet}} should return a reference to the function result or whether these functions should try to interpret the result as a vector or matrix of integer, doubles, logicals, or characters.}
+    \item{as.reference}{A logical vector of length one indicating whether the result of \code{\link{intpGet}} should return a reference to the function result or whether these functions should try to interpret the result as a vector or matrix of integer, doubles, logicals, or characters.  The default is \code{NA} which first tries \code{\var{as.reference}=FALSE} and, if no conversion is possible, \code{\var{as.reference}=TRUE} is done.}
     \item{interpolate}{When equal to \code{""} (the default), the default behavior from \code{\link{intpSettings}} is used.  If equal to \code{TRUE}, the interpreter will call \code{\link{strintrplt}} on the supplied code before running it.  If equal to \code{FALSE}, the character vector is passed unaltered.}
     \item{length.one.as.vector}{When equal to \code{""} (the default), the default behavior from \code{\link{intpSettings}} is used.  If equal to \code{TRUE}, setting a vector of length one in the interpreter will result in an array of length one.  If equal to \code{FALSE}, setting a vector of length one results in an atomic value.  For example, \code{pi} is a vector of length one in \R and, when set in an interpreter, would result in an array of doubles of length one if \var{length.one.as.vector} is \code{TRUE} or a double if \var{length.one.as.vector} is \code{FALSE}.}
     \item{quiet}{When equal to \code{""} (the default), the default behavior from \code{\link{intpSettings}} is used.  Otherwise, console output from the interpreter will be displayed if \code{TRUE} and will be suppressed if \code{FALSE}.}
+    \item{reference}{This option is meant only for developers of the package itself and not intended for users of the package.}
+    \item{item.name}{A character vector of length one containing the name of an object/class for which the \sQuote{scalap} command should be run.}
 }
 \details{
 The convenient shorthand notation \code{interpreter \%~\% snippet} both
@@ -126,6 +130,7 @@ s$rPi <- pi
 intpGet(s,"rPi")
 intpGet(s,"rPi",as.reference=TRUE)              # Get the result as a reference
 intpSet(s,"rPi",pi,length.one.as.vector=FALSE)  # Override current global setting
+intpSettings(s,length.one.as.vector=FALSE)      # Put it back to the default
 
 # Convenient notation
 a1 <- s \%~\%  "rPi/2"   # As an R value
@@ -140,33 +145,43 @@ s \%~\% 'println("Hello")'
 intpEval(s,'println("Hello")')
 intpEval(s,'println("Hello")',quiet=FALSE)  # But the default can be overridden
 
+# Instantiate an object
+seed <- 2349234L
+rng <- s$do('scala.util.Random')$new(seed)  # Scala equivalent: new scala.util.Random(seed)
+
+# Call method of a reference
+rng$nextInt(100L)                        # Scala equivalent: rng.nextInt(100)
+
+# Call method of companion object and call methods of a reference
+# Scala equivalent: (scala.math.BigInt('777',8) - 500).intValue
+s$do('scala.math.BigInt')$apply('777',8L)$'-'(500L)$intValue()
+
 # Longer example showing that 'intpDef' is more flexible and faster than '\%~\%'
-seed <- 2349234
-rng <- s \%.~\% 'new java.util.Random(${seed})'
-drawGaussian <- intpDef(s,'mean: Double, sd: Double','mean+sd*${rng}.nextDouble')
+intpSet(s,"rng",rng)
+drawGaussian <- intpDef(s,'mean: Double, sd: Double','mean+sd*rng.nextDouble')
 drawGaussian(3,0.1)
 n.draws <- 100
 system.time({
   draws <- s \%~\% '
     val result = new Array[Double](${n.draws})
-    result(0) = ${rng}.nextGaussian
+    result(0) = rng.nextGaussian
     for ( i <- 1 until ${n.draws} ) {
-      result(i) = 0.5*result(i-1) + ${rng}.nextGaussian
+      result(i) = 0.5*result(i-1) + rng.nextGaussian
     }
     result
   '
   acf(draws,plot=FALSE)
 })
-sampler <- s$def('nDraws: Int, rho: Double, rand: java.util.Random','
+sampler <- s$def('nDraws: Int, rho: Double','
   val result = new Array[Double](nDraws)
-  result(0) = rand.nextGaussian
+  result(0) = rng.nextGaussian
   for ( i <- 1 until nDraws ) {
-    result(i) = rho*result(i-1) + rand.nextGaussian
+    result(i) = rho*result(i-1) + rng.nextGaussian
   }
   result
 ')
-system.time(acf(sampler(n.draws,0.5,rng),plot=FALSE))
-system.time(acf(sampler(n.draws,0.9,rng),plot=FALSE))
+system.time(acf(sampler(n.draws,0.5),plot=FALSE))
+system.time(acf(sampler(n.draws,0.9),plot=FALSE))
 }
 }
 
