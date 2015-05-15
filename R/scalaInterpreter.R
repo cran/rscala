@@ -1,12 +1,13 @@
 ## Scala scripting over TCP/IP
 
-scalaInterpreter <- function(classpath=character(0),scala.home=NULL,java.home=NULL,java.heap.maximum="256M",java.opts=NULL,debug.filename=NULL) {
+scalaInterpreter <- function(classpath=character(0),scala.home=NULL,java.home=NULL,java.heap.maximum="256M",java.opts=NULL,timeout=60,debug.filename=NULL) {
   debug <- !is.null(debug.filename)
   userJars <- unlist(strsplit(classpath,.Platform$path.sep))
   if ( is.null(java.opts) ) {
     java.opts <- c(paste("-Xmx",java.heap.maximum,sep=""),"-Xms32M")
   }
   sInfo <- scalaInfo(scala.home)
+  if ( is.null(sInfo) ) stop("Cannot find a suitable Scala installation.  Please manually install Scala or run 'scalaInstall()'.")
   rsJar <- rscalaJar(sInfo$version)
   rsClasspath <- shQuote(paste(c(rsJar,userJars),collapse=.Platform$path.sep))
   args <- c(
@@ -30,12 +31,12 @@ scalaInterpreter <- function(classpath=character(0),scala.home=NULL,java.home=NU
   Sys.setenv(RSCALA_TUNNELING="TRUE")
   bootstrap.filename <- tempfile("rscala-")
   bootstrap.file <- file(bootstrap.filename, "w")
-  writeLines(c(sprintf('org.ddahl.rscala.ScalaServer(org.ddahl.rscala.ScalaInterpreterAdapter($intp),raw"%s").run()',portsFilename),'sys.exit(0)'),bootstrap.file)
+  writeLines(c(sprintf('org.ddahl.rscala.server.ScalaServer(org.ddahl.rscala.server.ScalaInterpreterAdapter($intp),raw"%s").run()',portsFilename),'sys.exit(0)'),bootstrap.file)
   close(bootstrap.file)
   stdout <- ifelse(!is.null(debug.filename),sprintf("%s-stdout",debug.filename),FALSE)
   stderr <- ifelse(!is.null(debug.filename),sprintf("%s-stderr",debug.filename),FALSE)
   system2(javaCmd(java.home),args,wait=FALSE,stdin=bootstrap.filename,stdout=stdout,stderr=stderr)
-  sockets <- newSockets(portsFilename,debug)
+  sockets <- newSockets(portsFilename,debug,timeout)
   sockets[['scalaInfo']] <- sInfo
   assign("debug",!debug,envir=sockets[['env']])
   assign("markedForGC",integer(0),envir=sockets[['env']])
@@ -43,13 +44,14 @@ scalaInterpreter <- function(classpath=character(0),scala.home=NULL,java.home=NU
   sockets
 }
 
-newSockets <- function(portsFilename,debug) {
+newSockets <- function(portsFilename,debug,timeout) {
   getPortNumbers <- function() {
-    delay <- 0.05
+    delay <- 0.1
+    start <- proc.time()[3]
     while ( TRUE ) {
-      if ( delay > 20 ) stop("Cannot start JVM.")
+      if ( ( proc.time()[3] - start ) > timeout ) stop("Timed out waiting for Scala to start.")
       Sys.sleep(delay)
-      delay <- 1.2*delay
+      delay <- 1.0*delay
       if ( file.exists(portsFilename) ) {
         line <- scan(portsFilename,n=2,what=character(0),quiet=TRUE)
         if ( length(line) > 0 ) return(as.numeric(line))
@@ -66,10 +68,14 @@ newSockets <- function(portsFilename,debug) {
   assign("open",TRUE,envir=env)
   assign("debug",debug,envir=env)
   assign("length.one.as.vector",FALSE,envir=env)
-  result <- list(socketIn=socketConnectionIn,socketOut=socketConnectionOut,env=env,functionCache=functionCache)
+  workspace <- new.env()
+  workspace$. <- new.env(parent=workspace)
+  result <- list(socketIn=socketConnectionIn,socketOut=socketConnectionOut,env=env,workspace=workspace,functionCache=functionCache)
   class(result) <- "ScalaInterpreter"
   status <- rb(result,integer(0))
   if ( ( length(status) == 0 ) || ( status != OK ) ) stop("Error instantiating interpreter.")
+  wc(result,toString(packageVersion("rscala")))
+  flush(result[['socketIn']])
   result
 }
 
@@ -81,12 +87,10 @@ intpEval.ScalaInterpreter <- function(interpreter,snippet,interpolate="",quiet="
   }
   wb(interpreter,EVAL)
   wc(interpreter,snippet)
+  flush(interpreter[['socketIn']])
   rServe(interpreter)
   status <- rb(interpreter,integer(0))
   echoResponseScala(interpreter,quiet)
-  if ( status == ERROR ) {
-    stop("Evaluation error.")
-  }
   invisible(NULL)
 }
 
@@ -151,7 +155,7 @@ toString.ScalaInterpreterItem <- function(x,...) {
   type <- reference[['type']]
   functionCache <- reference[['interpreter']][['functionCache']]
   env <- reference[['interpreter']][['env']]
-  function(...,evaluate=TRUE,length.one.as.vector="") {
+  function(...,evaluate=TRUE,length.one.as.vector="",as.reference=NA,quiet="",gc=FALSE) {
     loav <- ! ( ( ( length.one.as.vector == "" ) && ( ! get("length.one.as.vector",envir=env) ) ) || length.one.as.vector == FALSE )
     args <- list(...)
     nArgs <- length(args)
@@ -171,7 +175,7 @@ toString.ScalaInterpreterItem <- function(x,...) {
       f <- get(key,envir=functionCache)
       assign("rscalaReference",reference,envir=environment(f),inherits=TRUE)
     }
-    if ( evaluate ) f(...)
+    if ( evaluate ) f(...,as.reference=as.reference,quiet=quiet,gc=gc)
     else f
   }
 }
@@ -181,7 +185,7 @@ toString.ScalaInterpreterItem <- function(x,...) {
   type <- item[['item.name']]
   functionCache <- interpreter[['functionCache']]
   env <- interpreter[['env']]
-  function(...,evaluate=TRUE,length.one.as.vector="") {
+  function(...,evaluate=TRUE,length.one.as.vector="",as.reference=NA,quiet="",gc=FALSE) {
     loav <- ! ( ( ( length.one.as.vector == "" ) && ( ! get("length.one.as.vector",envir=env) ) ) || length.one.as.vector == FALSE )
     args <- list(...)
     nArgs <- length(args)
@@ -208,7 +212,7 @@ toString.ScalaInterpreterItem <- function(x,...) {
     } else {
       f <- get(key,envir=functionCache)
     }
-    if ( evaluate ) f(...)
+    if ( evaluate ) f(...,as.reference=as.reference,quiet=quiet,gc=gc)
     else f
   }
 }
@@ -219,6 +223,7 @@ intpGet.ScalaInterpreter <- function(interpreter,identifier,as.reference=NA) {
     if ( inherits(identifier,"ScalaInterpreterReference") ) return(identifier)
     wb(interpreter,GET_REFERENCE)
     wc(interpreter,as.character(identifier[1]))
+    flush(interpreter[['socketIn']])
     response <- rb(interpreter,integer(0))
     if ( response == OK ) {
       id <- rc(interpreter)
@@ -243,6 +248,7 @@ intpGet.ScalaInterpreter <- function(interpreter,identifier,as.reference=NA) {
   i <- if ( inherits(identifier,"ScalaInterpreterReference") ) identifier[['identifier']] else as.character(identifier[1])
   wb(interpreter,GET)
   wc(interpreter,i)
+  flush(interpreter[['socketIn']])
   dataStructure <- rb(interpreter,integer(0))
   if ( dataStructure == NULLTYPE ) {
     NULL
@@ -282,6 +288,9 @@ intpGet.ScalaInterpreter <- function(interpreter,identifier,as.reference=NA) {
       if ( dataType == BOOLEAN ) mode(v) <- "logical"
       v
     }
+  } else if ( dataStructure == REFERENCE ) {
+    itemName <- rc(interpreter)
+    get(itemName,envir=interpreter[['workspace']]$.)
   } else if ( dataStructure == ERROR ) {
     echoResponseScala(interpreter,FALSE)
     stop(paste("Exception thrown.",sep=""))
@@ -345,6 +354,7 @@ intpSet.ScalaInterpreter <- function(interpreter,identifier,value,length.one.as.
     wc(interpreter,identifier)
     wb(interpreter,REFERENCE)
     wc(interpreter,value[['identifier']])
+    flush(interpreter[['socketIn']])
     status <- rb(interpreter,integer(0))
     echoResponseScala(interpreter,quiet)
     if ( status == ERROR ) {
@@ -388,6 +398,7 @@ intpSet.ScalaInterpreter <- function(interpreter,identifier,value,length.one.as.
       wc(interpreter,identifier)
       wb(interpreter,NULLTYPE)
     } else stop("Data structure is not supported.")
+    flush(interpreter[['socketIn']])
     echoResponseScala(interpreter,quiet)
   }
   invisible()
@@ -395,7 +406,12 @@ intpSet.ScalaInterpreter <- function(interpreter,identifier,value,length.one.as.
 
 '$<-.ScalaInterpreter' <- function(interpreter,identifier,value) {
   cc(interpreter)
-  intpSet(interpreter,identifier,value)
+  if ( substring(identifier,1,1) == "." ) {
+    identifier = substring(identifier,2)
+    intpSet(interpreter,identifier,intpWrap(interpreter,value))
+  } else {
+    intpSet(interpreter,identifier,value)
+  }
   interpreter
 }
 
@@ -414,6 +430,7 @@ intpDef.ScalaInterpreter <- function(interpreter,args,body,interpolate="",quiet=
   else args
   wc(interpreter,prependedArgs)
   wc(interpreter,body)
+  flush(interpreter[['socketIn']])
   status <- rb(interpreter,integer(0))
   if ( status == OK ) {
     status <- rb(interpreter,integer(0))
@@ -436,13 +453,14 @@ intpDef.ScalaInterpreter <- function(interpreter,args,body,interpolate="",quiet=
           convertedCodeStr <- paste("    ",unlist(convertedCode),sep="",collapse="\n")
           argsStr <- if ( ! is.null(reference) ) paste(functionParamNames[-1],collapse=",")
           else paste(functionParamNames,collapse=",")
-          if ( nchar(argsStr) > 0 ) argsStr <- paste(argsStr,",",sep="")
+          if ( nchar(argsStr) > 0 ) argsStr <- paste(argsStr,", ",sep="")
           functionSnippet <- strintrplt('
-  tmpFunc <- function(${argsStr}as.reference=NA,quiet="",gc=FALSE) {
-${convertedCodeStr}
+  tmpFunc <- function(@{argsStr}as.reference=NA,quiet="",gc=FALSE) {
+@{convertedCodeStr}
     if ( gc ) intpGC(interpreter)
     rscala:::wb(interpreter,rscala:::INVOKE)
-    rscala:::wc(interpreter,"${functionName}")
+    rscala:::wc(interpreter,"@{functionName}")
+    flush(interpreter[["socketIn"]])
     rscala:::rServe(interpreter)
     status <- rscala:::rb(interpreter,integer(0))
     rscala:::echoResponseScala(interpreter,quiet)
@@ -484,7 +502,20 @@ scalap <- function(interpreter,item.name) {
   cc(interpreter)
   wb(interpreter,SCALAP)
   wc(interpreter,item.name)
+  flush(interpreter[['socketIn']])
   cat(rc(interpreter),"\n")
+}
+
+intpWrap.ScalaInterpreter <- function(interpreter,value) {
+  cc(interpreter)
+  interpreter[['workspace']]$.rscala.wrap <- value
+  interpreter$.R$getR(".rscala.wrap",as.reference=TRUE)
+}
+
+intpUnwrap.ScalaInterpreter <- function(interpreter,value) {
+  cc(interpreter)
+  if ( is.null(value) ) NULL
+  else get(value$name(),envir=interpreter[['workspace']]$.)
 }
 
 intpGC.ScalaInterpreter <- function(interpreter) {
@@ -495,6 +526,7 @@ intpGC.ScalaInterpreter <- function(interpreter) {
     wb(interpreter,GC)
     wb(interpreter,length(markedForGC))
     wb(interpreter,markedForGC)
+    flush(interpreter[['socketIn']])
     assign("markedForGC",integer(0),interpreter[["env"]])
   }
   invisible()
@@ -503,12 +535,14 @@ intpGC.ScalaInterpreter <- function(interpreter) {
 intpReset.ScalaInterpreter <- function(interpreter) {
   cc(interpreter)
   wb(interpreter,RESET)
+  flush(interpreter[['socketIn']])
 }
 
 close.ScalaInterpreter <- function(con,...) {
   cc(con)
   assign("open",FALSE,envir=con[['env']])
   wb(con,EXIT)
+  flush(con[['socketIn']])
 }
 
 rscalaPackage <- function(pkgname) {
@@ -516,7 +550,7 @@ rscalaPackage <- function(pkgname) {
   E <- new.env(parent=environmentOfDependingPackage)
   E$initialized <- FALSE
   E$pkgname <- pkgname
-  E$jars <- list.files(system.file("java",package=pkgname),pattern=".*.jar",full.names=TRUE)
+  E$jars <- list.files(system.file("java",package=pkgname),pattern=".*.jar",full.names=TRUE,recursive=TRUE)
   assign("E",E,envir=environmentOfDependingPackage)
   invisible()
 }
@@ -537,17 +571,40 @@ rscalaJar <- function(version="") {
   list.files(system.file("java",package="rscala"),pattern=paste("rscala_",major.version,'-.*[0-9]\\.jar',sep=""),full.names=TRUE)
 }
 
-javaCmd <- function(java.home=NULL) {
-  if ( is.null(java.home) ) java.home <- ""
-  candidate <- normalizePath(file.path(java.home,"bin",sprintf("java%s",ifelse(.Platform$OS=="windows",".exe",""))),mustWork=FALSE)
-  if ( file.exists(candidate) ) return(candidate)
+javaCmd <- function(java.home=NULL,verbose=FALSE) {
+  successMsg <- "SUCCESS: "
+  failureMsg <- "FAILURE: "
+  if ( verbose ) techniqueMsg <- "'java.home' argument"
+  if ( is.null(java.home) ) {
+    if ( verbose ) cat(failureMsg,techniqueMsg," is NULL","\n",sep="")
+  } else {
+    # Attempt 1
+    candidate <- normalizePath(file.path(java.home,"bin",sprintf("java%s",ifelse(.Platform$OS=="windows",".exe",""))),mustWork=FALSE)
+    if ( verbose ) techniqueMsg <- sprintf("'java.home' (%s) argument",java.home)
+    if ( file.exists(candidate) ) { if ( verbose ) cat(successMsg,techniqueMsg,"\n",sep=""); return(candidate) }
+    else if ( verbose ) cat(failureMsg,techniqueMsg,"\n",sep="")
+  }
+  # Attempt 2
   candidate <- normalizePath(Sys.getenv("JAVACMD"),mustWork=FALSE)
-  if ( file.exists(candidate) ) return(candidate)
-  candidate <- normalizePath(file.path(Sys.getenv("JAVA_HOME"),"bin",sprintf("java%s",ifelse(.Platform$OS=="windows",".exe",""))),mustWork=FALSE)
-  if ( file.exists(candidate) ) return(candidate)
+  if ( verbose ) techniqueMsg <- sprintf("JAVACMD (%s) environment variable",Sys.getenv("JAVACMD"))
+  if ( file.exists(candidate) ) { if ( verbose ) cat(successMsg,techniqueMsg,"\n",sep=""); return(candidate) }
+  else if ( verbose ) cat(failureMsg,techniqueMsg,"\n",sep="")
+  # Attempt 3
+  java.home.tmp <- Sys.getenv("JAVA_HOME")
+  if ( verbose ) techniqueMsg <- sprintf("JAVA_HOME (%s) environment variable",java.home.tmp)
+  candidate <- if ( java.home.tmp != "" ) {
+    normalizePath(file.path(java.home.tmp,"bin",sprintf("java%s",ifelse(.Platform$OS=="windows",".exe",""))),mustWork=FALSE)
+  } else ""
+  if ( file.exists(candidate) ) { if ( verbose ) cat(successMsg,techniqueMsg,"\n",sep=""); return(candidate) }
+  else if ( verbose ) cat(failureMsg,techniqueMsg,"\n",sep="")
+  # Attempt 4
   candidate <- normalizePath(Sys.which("java"),mustWork=FALSE)
-  if ( file.exists(candidate) ) return(candidate)
+  if ( verbose ) techniqueMsg <- "'java' in the shell's search path"
+  if ( file.exists(candidate) ) { if ( verbose ) cat(successMsg,techniqueMsg,"\n",sep=""); return(candidate) }
+  else if ( verbose ) cat(failureMsg,techniqueMsg,"\n",sep="")
+  # Attempt 5
   if ( .Platform$OS == "windows" ) {
+    if ( verbose ) techniqueMsg <- "querying the Windows registry"
     readRegistryKey <- function(key.name,value.name) {
       v <- suppressWarnings(system2("reg",c("query",shQuote(key.name),"/v",value.name),stdout=TRUE))
       a <- attr(v,"status")
@@ -560,48 +617,124 @@ javaCmd <- function(java.home=NULL) {
     java.home <- readRegistryKey(sprintf("%s\\%s",java.key,java.version),"JavaHome")
     if ( ! is.null(java.home) ) {
       candidate <- normalizePath(file.path(java.home,"bin",sprintf("java%s",ifelse(.Platform$OS=="windows",".exe",""))),mustWork=FALSE)
-      if ( file.exists(candidate) ) return(candidate)
+      if ( file.exists(candidate) ) { if ( verbose ) cat(successMsg,techniqueMsg,"\n",sep=""); return(candidate) }
+      else if ( verbose ) cat(failureMsg,techniqueMsg,"\n",sep="")
+    } else if ( verbose ) cat(failureMsg,techniqueMsg,"\n",sep="")
+  }
+  if ( ! verbose ) javaCmd(java.home=java.home,verbose=TRUE)
+  else stop("Cannot find Java executable")
+}
+
+scalaInfoEngine <- function(scala.command,verbose) {
+  scala.command <- normalizePath(scala.command,mustWork=FALSE)
+  if ( ! file.exists(scala.command) ) return(NULL)
+  if ( verbose ) {
+    cat(sprintf("  * ATTEMPT: Found a candidate (%s)\n",scala.command))
+    tab <- "    - "
+  }
+  scala.home <- dirname(dirname(scala.command))
+  jars <- list.files(file.path(scala.home,"lib"),"*.jar",full.names=TRUE)
+  libraryJar <- jars[grepl("^scala-library",basename(jars))]
+  if ( length(libraryJar) == 0 ) {
+    if ( verbose ) cat(tab,sprintf("scala-library.jar is not in 'lib' directory of assumed Scala home (%s)\n",scala.home),sep="")
+    scala.home <- NULL
+    if ( .Platform$OS != "windows" ) {
+      if ( verbose ) cat(tab,"Looking for 'scala.home' property in 'scala' script\n",sep="")
+      showArguments <- system.file(file.path("bin","showArguments"),package="rscala")
+      scala.home <- suppressWarnings(
+        tryCatch({
+          output <- system2(scala.command,c("-e",shQuote("")),stdout=TRUE,stderr=FALSE,env=paste0("JAVACMD=",shQuote(showArguments)))
+          if ( ( ! is.null(attr(output,"status")) ) &&  ( attr(output,"status") != 0 ) ) NULL
+          else sub("^-Dscala.home=","",output[grepl("^-Dscala.home=",output)])[1]
+        },error=function(e) { NULL } )
+      )
+    }
+    if ( is.null(scala.home) ) {
+      if ( verbose ) cat(tab,"Executing snippet to find 'scala.home'\n",sep="")
+      scala.home <- suppressWarnings(
+        tryCatch(
+          system2(scala.command,c("-e",shQuote("println(sys.props(\"scala.home\"))")),stdout=TRUE,stderr=FALSE)
+        ,error=function(e) { NULL } )
+      )
+    }
+    if ( ( is.null(scala.home) ) || ( length(scala.home) != 1 ) ) {
+      if ( verbose ) cat(tab,"Cannot get 'scala.home' property from 'scala' script\n",sep="")
+      return(NULL)
+    }
+    jars <- list.files(file.path(scala.home,"lib"),"*.jar",full.names=TRUE)
+    libraryJar <- jars[grepl("^scala-library",basename(jars))]
+    if ( length(libraryJar) == 0 ) {
+      if ( verbose ) cat(tab,sprintf("scala-library.jar is not in 'lib' directory of purported Scala home (%s)\n",scala.home),sep="")
+      return(NULL)
     }
   }
-  msg <- sprintf("Cannot find Java executable.  Please set 'java.home' argument, set 'JAVACMD' or 'JAVA_HOME' environment variables, %sadd 'java' to your shell's search path%s.",
-    ifelse(.Platform$OS=="windows","","or "),
-    ifelse(.Platform$OS=="windows",", or set the appropriate Windows registry keys for your Java installation",""))
-  stop(msg)
+  libraryJar <- libraryJar[1]
+  major.version <- tryCatch({
+    fn <- unz(libraryJar,"library.properties")
+    lines <- readLines(fn)
+    close(fn)
+    version <- sub("^version.number=","",lines[grepl("^version.number=",lines)])[1]
+    if ( substring(version,4,4) == "." ) substr(version,1,3)
+    else substr(version,1,4)
+  },error=function(e) { NULL } )
+  if ( is.null(major.version) ) {
+    if ( verbose ) cat(sprintf("Cannot get Scala version from library jar (%s)\n",libraryJar))
+    return(NULL)
+  }
+  if ( ! ( major.version %in% c("2.10","2.11") ) ) {
+    if ( verbose ) cat(sprintf("Unsupported major version (%s) from Scala executable (%s)\n",major.version,scala.command))
+    return(NULL)
+  }
+  list(cmd=scala.command,home=scala.home,version=version,major.version=major.version,jars=jars)
 }
 
-scalaCmd <- function(scala.home=NULL) {
-  if ( is.null(scala.home) ) scala.home <- ""
-  candidate <- normalizePath(file.path(scala.home,"bin","scala"),mustWork=FALSE)
-  if ( file.exists(candidate) ) return(candidate)
-  candidate <- normalizePath(file.path(Sys.getenv("SCALA_HOME"),"bin","scala"),mustWork=FALSE)
-  if ( file.exists(candidate) ) return(candidate)
-  candidate <- normalizePath(Sys.which("scala"),mustWork=FALSE)
-  if ( file.exists(candidate) ) return(candidate)
+scalaInfo <- function(scala.home=NULL,verbose=FALSE) {
+  if ( verbose ) cat("\nSearching for a suitable Scala installation.\n")
+  tab <- "  * "
+  if ( verbose ) {
+    successMsg <- "SUCCESS: "
+    failureMsg <- "FAILURE: "
+  }
+  if ( verbose ) techniqueMsg <- "'scala.home' argument"
+  if ( is.null(scala.home) ) {
+    if ( verbose ) cat(tab,failureMsg,techniqueMsg," is NULL","\n",sep="")
+  } else {
+    # Attempt 1
+    info <- scalaInfoEngine(file.path(scala.home,"bin","scala"),verbose)
+    if ( verbose ) techniqueMsg <- sprintf("'scala.home' (%s) argument",scala.home)
+    if ( ! is.null(info) ) { if ( verbose ) cat(tab,successMsg,techniqueMsg,"\n\n",sep=""); return(info) }
+    else if ( verbose ) cat(tab,failureMsg,techniqueMsg,"\n",sep="")
+  }
+  # Attempt 2
+  scala.home.tmp <- Sys.getenv("SCALA_HOME")
+  if ( verbose ) techniqueMsg <- sprintf("SCALA_HOME (%s) environment variable",scala.home.tmp)
+  info <- if ( scala.home.tmp != "" ) {
+    scalaInfoEngine(file.path(scala.home.tmp,"bin","scala"),verbose)
+  } else NULL
+  if ( ! is.null(info) ) { if ( verbose ) cat(tab,successMsg,techniqueMsg,"\n\n",sep=""); return(info) }
+  else if ( verbose ) cat(tab,failureMsg,techniqueMsg,"\n",sep="")
+  # Attempt 3
+  info <- scalaInfoEngine(Sys.which("scala"),verbose)
+  if ( verbose ) techniqueMsg <- "'scala' in the shell's search path"
+  if ( ! is.null(info) ) { if ( verbose ) cat(tab,successMsg,techniqueMsg,"\n\n",sep=""); return(info) }
+  else if ( verbose ) cat(tab,failureMsg,techniqueMsg,"\n",sep="")
+  # Attempt 4
   installDir <- normalizePath(file.path("~",".rscala",sprintf("scala-%s",CURRENT_SUPPORTED_SCALA_VERSION)),mustWork=FALSE)
-  candidate <- file.path(installDir,"bin","scala")
-  if ( file.exists(candidate) ) return(candidate)
-  if ( ! interactive() ) installDir <- normalizePath(file.path(tempdir(),sprintf("scala-%s",CURRENT_SUPPORTED_SCALA_VERSION)),mustWork=FALSE)
-  installScala(installDir)
-  candidate <- file.path(installDir,"bin","scala")
-  if ( file.exists(candidate) ) return(candidate)
-  stop("Cannot find Scala executable.  Please set 'scala.home' argument, set the 'SCALA_HOME' environment variable, or add 'scala' to your shell's search path.")
-}
-
-scalaInfo <- function(scala.home=NULL,java.home=NULL,...) {
-  cmd <- scalaCmd(scala.home)
-  home <- dirname(dirname(cmd))
-  libraryJar <- file.path(home,"lib","scala-library.jar")
-  jars <- list.files(file.path(home,"lib"),"*.jar",full.names=TRUE)
-  if ( ! ( libraryJar %in% jars ) ) stop(sprintf("Found Scala executable (%s) but not its library JAR (%s).",cmd,libraryJar))
-  version <- suppressWarnings(
-    tryCatch(
-      system2(javaCmd(java.home),c("-classpath",shQuote(paste(c(jars,rscalaJar()),collapse=.Platform$path.sep)),"org.ddahl.rscala.Helper"),stdout=TRUE,stderr=FALSE)
-    ,error=function(e) {})
-  )
-  if ( ( is.null(version) ) || ( length(version) != 1 ) ) stop(sprintf("Unable to launch Scala executable (%s).  Perhaps your JAVACMD, JAVA_HOME, or PATH environment variables is not properly set.",cmd))
-  major.version = substr(version,1,4)
-  if ( ! ( major.version %in% c("2.10","2.11") ) ) stop(sprintf("Unsuported major version from Scala executable (%s): %s.",cmd,major.version))
-  list(cmd=cmd,home=home,version=version,major.version=major.version,jars=jars)
+  info <- scalaInfoEngine(file.path(installDir,"bin","scala"),verbose)
+  if ( verbose ) techniqueMsg <- sprintf("special installation directory (%s)",installDir)
+  if ( ! is.null(info) ) { if ( verbose ) cat(tab,successMsg,techniqueMsg,"\n\n",sep=""); return(info) }
+  else if ( verbose ) cat(tab,failureMsg,techniqueMsg,"\n",sep="")
+  # Attempt 5
+  if ( ! verbose ) scalaInfo(scala.home=scala.home,verbose=TRUE)
+  else {
+    cat("Cannot find a suitable Scala installation.\n\n")
+    f <- file(system.file(file.path("doc","README"),package="rscala"),open="r")
+    readme <- readLines(f)
+    close(f)
+    cat(readme,sep="\n")
+    cat("\n")
+    NULL
+  }
 }
 
 # Private
@@ -708,38 +841,36 @@ cc <- function(c) {
 wb <- function(c,v) writeBin(v,c[['socketIn']],endian="big")
 
 wc <- function(c,v) {
-  length <- nchar(v,type="bytes")
-  wb(c,length)
-  if ( length > 0 ) writeChar(v,c[['socketIn']],length,eos=NULL,useBytes=TRUE)
+  bytes <- charToRaw(v)
+  wb(c,length(bytes))
+  writeBin(bytes,c[['socketIn']],endian="big",useBytes=TRUE)
 }
 
-rb <- function(c,v,n=1L) readBin(c[['socketOut']],v,n,endian="big")
+# Sockets should be blocking, but that contract is not fulfilled when other code uses functions from the parallel library.  Program around their problem.
+rb <- function(c,v,n=1L) {
+  r <- readBin(c[['socketOut']],what=v,n=n,endian="big")
+  if ( length(r) == n ) r
+  else c(r,rb(c,v,n-length(r)))
+}
 
+# Sockets should be blocking, but that contract is not fulfilled when other code uses functions from the parallel library.  Program around their problem.
 rc <- function(c) {
   length <- rb(c,integer(0))
-  readChar(c[['socketOut']],length,useBytes=TRUE)
+  r <- as.raw(c())
+  while ( length(r) != length ) r <- c(r,readBin(c[['socketOut']],what="raw",n=length,endian="big"))
+  rawToChar(r)
 }
 
-installScala <- function(installPath) {
-  cat("\nThe Scala executable is not found.\n")
-  if ( interactive() ) {
-    prompt <- sprintf("Would you like to install it now at %s? [Y/n] ",installPath)
-    ans <- "NONSENSE"
-    while (!(ans %in% c("","Y","y","N","n"))) ans <- readline(prompt=prompt)
-  } else {
-    cat("Installing in R's temporary directory since this session is not interactive.\n")
-    ans <- "y"
-  }
-  if ( ans %in% c("","Y","y") ) {
-    url <- sprintf("http://downloads.typesafe.com/scala/%s/scala-%s.tgz",CURRENT_SUPPORTED_SCALA_VERSION,CURRENT_SUPPORTED_SCALA_VERSION)
-    installPath <- dirname(installPath)
-    dir.create(installPath,showWarnings=FALSE,recursive=TRUE)
-    destfile <- file.path(installPath,basename(url))
-    result <- download.file(url,destfile)
-    if ( result != 0 ) return()
-    result <- untar(destfile,exdir=installPath,tar="internal")    # Use internal to avoid problems on a Mac.
-    unlink(destfile)
-    if ( result != 0 ) return()
-  }
+scalaInstall <- function() {
+  installPath <- normalizePath(file.path("~",".rscala"),mustWork=FALSE)
+  url <- sprintf("http://downloads.typesafe.com/scala/%s/scala-%s.tgz",CURRENT_SUPPORTED_SCALA_VERSION,CURRENT_SUPPORTED_SCALA_VERSION)
+  dir.create(installPath,showWarnings=FALSE,recursive=TRUE)
+  destfile <- file.path(installPath,basename(url))
+  result <- download.file(url,destfile)
+  if ( result != 0 ) return(invisible(result))
+  result <- untar(destfile,exdir=installPath,tar="internal")    # Use internal to avoid problems on a Mac.
+  unlink(destfile)
+  if ( result == 0 ) cat("Successfully installed Scala in ",file.path(installPath,sprintf("scala-%s",CURRENT_SUPPORTED_SCALA_VERSION)),"\n",sep="")
+  invisible(result)
 }
 
