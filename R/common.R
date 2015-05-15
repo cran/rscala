@@ -2,7 +2,8 @@ intpEval  <- function(interpreter, snippet, interpolate="", quiet="") UseMethod(
 intpGet   <- function(interpreter, identifier, as.reference=NA) UseMethod("intpGet")
 intpSet   <- function(interpreter, identifier, value, length.one.as.vector="", quiet="") UseMethod("intpSet")
 intpDef   <- function(interpreter, args, body, interpolate="", quiet="", reference=NULL) UseMethod("intpDef")
-intpWrap  <- function(interpreter, item.name) UseMethod("intpWrap")
+intpWrap  <- function(interpreter, value) UseMethod("intpWrap")
+intpUnwrap  <- function(interpreter, value) UseMethod("intpUnwrap")
 intpGC    <- function(interpreter) UseMethod("intpGC")
 intpReset <- function(interpreter) UseMethod("reset")
 '%~%' <- function(interpreter,snippet) UseMethod("%~%")
@@ -11,7 +12,7 @@ intpReset <- function(interpreter) UseMethod("reset")
 strintrplt <- function(snippet,envir=parent.frame()) {
   if ( ! is.character(snippet) ) stop("Character vector expected.")
   if ( length(snippet) != 1 ) stop("Length of vector must be exactly one.")
-  m <- regexpr("\\$\\{([^\\}]+)\\}",snippet)
+  m <- regexpr("@\\{([^\\}]+)\\}",snippet)
   if ( m != -1 ) {
     s1 <- substr(snippet,1,m-1)
     s2 <- substr(snippet,m+2,m+attr(m,"match.length")-2)

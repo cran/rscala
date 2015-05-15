@@ -10,6 +10,7 @@ export("rscalaPackage")
 export("rscalaLoad")
 export("javaCmd")
 export("scalaInfo")
+export("scalaInstall")
 export("scalap")
 
 S3method("print","ScalaInterpreter")
@@ -21,6 +22,12 @@ S3method("$","ScalaInterpreterReference")
 S3method("print","ScalaInterpreterItem")
 S3method("toString","ScalaInterpreterItem")
 S3method("$","ScalaInterpreterItem")
+
+export("intpWrap")
+S3method("intpWrap","ScalaInterpreter")
+
+export("intpUnwrap")
+S3method("intpUnwrap","ScalaInterpreter")
 
 export("intpEval")
 S3method("intpEval","ScalaInterpreter")

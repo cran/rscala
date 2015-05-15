@@ -1,6 +1,6 @@
 rServe <- function(sockets) {
   cc(sockets)
-  globalEnv <- .GlobalEnv
+  workspace <- sockets[['workspace']]
   debug <- get("debug",envir=sockets[['env']])
   while ( TRUE ) {
     if ( debug ) cat("R DEBUG: Top of the loop waiting for a command.\n")
@@ -15,26 +15,26 @@ rServe <- function(sockets) {
       debug <- newDebug
       assign("debug",debug,envir=sockets[['env']])
     } else if ( cmd == EVAL ) {
-      if ( debug) cat("R DEBUG: Got EVAL\n")
+      if ( debug ) cat("R DEBUG: Got EVAL\n")
       snippet <- rc(sockets)
-      output <- capture.output(result <- try(eval(parse(text=snippet),envir=globalEnv)))
+      output <- capture.output(result <- try(eval(parse(text=snippet),envir=workspace)))
       if ( inherits(result,"try-error") ) {
         wb(sockets,ERROR)
-        output <- paste(paste(output,collapse="\n"),paste(attr(result,"condition")$message,collapse="\n"),sep="\n")
-        wc(sockets,output)
+        msg <- paste(c(output,attr(result,"condition")$message),collapse="\n")
+        wc(sockets,msg)
       } else {
         wb(sockets,OK)
         output <- paste(output,collapse="\n")
         wc(sockets,output)
       }
-      assign(".rscala.last.value",result,envir=globalEnv)
+      assign(".rscala.last.value",result,envir=workspace)
     } else if ( cmd %in% c(SET,SET_SINGLE,SET_DOUBLE) ) {
       if ( debug ) cat("R DEBUG: Got SET\n")
       if ( cmd != SET ) index <- rc(sockets)
       identifier <- rc(sockets)
       dataStructure <- rb(sockets,integer(0))
       if ( dataStructure == NULLTYPE ) {
-        if ( cmd == SET ) assign(identifier,NULL,envir=globalEnv)
+        if ( cmd == SET ) assign(identifier,NULL,envir=workspace)
         else subassign(sockets,identifier,index,NULL,cmd==SET_SINGLE)
       } else if ( dataStructure == ATOMIC ) {
         dataType <- rb(sockets,integer(0))
@@ -43,7 +43,7 @@ rServe <- function(sockets) {
         else if ( dataType == BOOLEAN ) value <- rb(sockets,integer(0)) != 0
         else if ( dataType == STRING ) value <- rc(sockets)
         else stop(paste("Unknown data type:",dataType))
-        if ( cmd == SET ) assign(identifier,value,envir=globalEnv)
+        if ( cmd == SET ) assign(identifier,value,envir=workspace)
         else subassign(sockets,identifier,index,value,cmd==SET_SINGLE)
       } else if ( dataStructure == VECTOR ) {
         dataLength <- rb(sockets,integer(0))
@@ -53,7 +53,7 @@ rServe <- function(sockets) {
         else if ( dataType == BOOLEAN ) value <- rb(sockets,integer(0),n=dataLength) != 0
         else if ( dataType == STRING ) value <- sapply(1:dataLength,function(i) rc(sockets))
         else stop(paste("Unknown data type:",dataType))
-        if ( cmd == SET ) assign(identifier,value,envir=globalEnv)
+        if ( cmd == SET ) assign(identifier,value,envir=workspace)
         else subassign(sockets,identifier,index,value,cmd==SET_SINGLE)
       } else if ( dataStructure == MATRIX ) {
         dataNRow <- rb(sockets,integer(0))
@@ -65,13 +65,23 @@ rServe <- function(sockets) {
         else if ( dataType == BOOLEAN ) value <- matrix(rb(sockets,integer(0),n=dataLength),nrow=dataNRow,byrow=TRUE) != 0
         else if ( dataType == STRING ) value <- matrix(sapply(1:dataLength,function(i) rc(sockets)),nrow=dataNRow,byrow=TRUE)
         else stop(paste("Unknown data type:",dataType))
-        if ( cmd == SET ) assign(identifier,value,envir=globalEnv)
+        if ( cmd == SET ) assign(identifier,value,envir=workspace)
         else subassign(sockets,identifier,index,value,cmd==SET_SINGLE)
+      } else if ( dataStructure == REFERENCE ) {
+        otherIdentifier <- rc(sockets)
+        if ( exists(otherIdentifier,envir=workspace$.) ) {
+          wb(sockets,OK)
+          value <- get(otherIdentifier,envir=workspace$.)
+          if ( cmd == SET ) assign(identifier,value,envir=workspace)
+          else subassign(sockets,identifier,index,value,cmd==SET_SINGLE)
+        } else {
+          wb(sockets,UNDEFINED_IDENTIFIER)
+        }
       } else stop(paste("Unknown data structure:",dataStructure))
     } else if ( cmd == GET ) {
-      if ( debug) cat("R DEBUG: Got GET\n")
+      if ( debug ) cat("R DEBUG: Got GET\n")
       identifier <- rc(sockets)
-      value <- tryCatch(get(identifier,envir=globalEnv),error=function(e) e)
+      value <- tryCatch(get(identifier,envir=workspace),error=function(e) e)
       if ( is.null(value) ) {
         wb(sockets,NULLTYPE)
       } else if ( inherits(value,"error") ) {
@@ -108,16 +118,29 @@ rServe <- function(sockets) {
       } else {
         wb(sockets,UNSUPPORTED_STRUCTURE)
       }
+    } else if ( cmd == GET_REFERENCE ) {
+      if ( debug ) cat("R DEBUG: Got GET_REFERENCE\n")
+      identifier <- rc(sockets)
+      value <- tryCatch(get(identifier,envir=workspace),error=function(e) e)
+      if ( inherits(value,"error") ) {
+        wb(sockets,UNDEFINED_IDENTIFIER)
+      } else {
+        wb(sockets,REFERENCE)
+        wc(sockets,new.reference(value,workspace$.))
+      }
+    } else if ( cmd == GC ) {
+      if ( debug ) cat("R DEBUG: Got GC\n")
+      workspace$. <- new.env(parent=workspace)
     } else stop(paste("Unknown command:",cmd))
     flush(sockets[['socketIn']])
   }
 }
 
 subassign <- function(sockets,x,i,value,single=TRUE) {
-  globalEnv <- .GlobalEnv
-  assign(".rscala.set.value",value,envir=globalEnv)
+  workspace <- sockets[['workspace']]
+  assign(".rscala.set.value",value,envir=workspace)
   brackets <- if ( single ) c("[","]") else c("[[","]]")
-  output <- capture.output(result <- try(eval(parse(text=paste0(x,brackets[1],i,brackets[2]," <- .rscala.set.value")),envir=globalEnv)))
+  output <- capture.output(result <- try(eval(parse(text=paste0(x,brackets[1],i,brackets[2]," <- .rscala.set.value")),envir=workspace)))
   if ( inherits(result,"try-error") ) {
     wb(sockets,ERROR)
     output <- paste(paste(output,collapse="\n"),paste(attr(result,"condition")$message,collapse="\n"),sep="\n")
@@ -125,7 +148,16 @@ subassign <- function(sockets,x,i,value,single=TRUE) {
   } else {
     wb(sockets,OK)
   }
-  rm(".rscala.set.value",envir=globalEnv)
+  rm(".rscala.set.value",envir=workspace)
   invisible(value)
+}
+
+new.reference <- function(value,envir) {
+  name <- ""
+  while ( ( name == "" ) || ( exists(name,envir=envir) ) ) {  
+    name <- paste0(sample(lEtTeRs,1),paste0(sample(alphabet,7,replace=TRUE),collapse=""))
+  }
+  assign(name,value,envir=envir)
+  name
 }
 

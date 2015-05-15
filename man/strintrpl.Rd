@@ -19,8 +19,8 @@ David B. Dahl \email{dahl@stat.byu.edu}
 }
 \keyword{interface}
 \examples{
-strintrplt('val msg = "Current R version is ${paste0(R.Version()$major,".",R.Version()$minor)}"')
+strintrplt('val msg = "Current R version is @{paste0(R.Version()$major,".",R.Version()$minor)}"')
 index <- 5
-strintrplt('var i = ${index-1}')
+strintrplt('var i = @{index-1}')
 }
 

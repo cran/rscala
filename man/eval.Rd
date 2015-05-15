@@ -1,20 +1,14 @@
 \name{eval}
 \alias{intpEval}
-%\alias{intpEval.ScalaInterpreter}
 \alias{intpGet}
-%\alias{intpGet.ScalaInterpreter}
 \alias{intpSet}
-%\alias{intpSet.ScalaInterpreter}
 \alias{intpDef}
-%\alias{intpDef.ScalaInterpreter}
+\alias{intpWrap}
+\alias{intpUnwrap}
 \alias{intpGC}
-%\alias{intpGC.ScalaInterpreter}
 \alias{intpReset}
-%\alias{intpReset.ScalaInterpreter}
 \alias{\%~\%}
 \alias{\%.~\%}
-%\alias{\%~\%.ScalaInterpreter}
-%\alias{\%.~\%.ScalaInterpreter}
 \alias{$.ScalaInterpreter}
 \alias{$<-.ScalaInterpreter}
 \alias{scalap}
@@ -37,6 +31,8 @@ intpEval(interpreter, snippet, interpolate="", quiet="")
 intpGet(interpreter, identifier, as.reference=NA)
 intpSet(interpreter, identifier, value, length.one.as.vector="", quiet="")
 intpDef(interpreter, args, body, interpolate = "", quiet = "", reference=NULL)
+intpWrap(interpreter, value)
+intpUnwrap(interpreter, value)
 intpGC(interpreter)
 intpReset(interpreter)
 scalap(interpreter, item.name)
@@ -48,12 +44,12 @@ interpreter \%.~\% snippet
 \method{$}{ScalaInterpreter}(interpreter, identifier) <- value
 }
 \arguments{
-    \item{interpreter}{An interpreter from an interpreter constructor (e.g., \code{\link{scalaInterpreter}}).}
+    \item{interpreter}{An interpreter from an interpreter constructor (i.e. \code{\link{scalaInterpreter}}).}
     \item{snippet}{A character vector of arbitrary length to be evaluated by the interpreter.}
     \item{args}{A character vector of length one giving the argument list for a function to be defined in the interpreter.  Use \code{""} for a function which takes no arguments.}
     \item{body}{A character vector of any length giving the body for a function to be defined in the interpreter.  The function body can be a multiline character vector of length one.}
     \item{identifier}{A character vector of length one containing a valid variable name in the embedded language.}
-    \item{value}{Either: i. a vector or matrix of integers, doubles, logicals, or characters, or ii. a reference.}
+    \item{value}{For \code{\link{intpWrap}}, an arbitrary R object.  For \code{\link{intpUnwrap}}, a result of a call to \code{\link{intpWrap}}.  For \code{\link{$<-}} either: i. a vector or matrix of integers, doubles, logicals, or characters, or ii. a reference.}
     \item{as.reference}{A logical vector of length one indicating whether the result of \code{\link{intpGet}} should return a reference to the function result or whether these functions should try to interpret the result as a vector or matrix of integer, doubles, logicals, or characters.  The default is \code{NA} which first tries \code{\var{as.reference}=FALSE} and, if no conversion is possible, \code{\var{as.reference}=TRUE} is done.}
     \item{interpolate}{When equal to \code{""} (the default), the default behavior from \code{\link{intpSettings}} is used.  If equal to \code{TRUE}, the interpreter will call \code{\link{strintrplt}} on the supplied code before running it.  If equal to \code{FALSE}, the character vector is passed unaltered.}
     \item{length.one.as.vector}{When equal to \code{""} (the default), the default behavior from \code{\link{intpSettings}} is used.  If equal to \code{TRUE}, setting a vector of length one in the interpreter will result in an array of length one.  If equal to \code{FALSE}, setting a vector of length one results in an atomic value.  For example, \code{pi} is a vector of length one in \R and, when set in an interpreter, would result in an array of doubles of length one if \var{length.one.as.vector} is \code{TRUE} or a double if \var{length.one.as.vector} is \code{FALSE}.}
@@ -114,7 +110,7 @@ s <- scalaInterpreter()
 intpSettings(s)
 
 # Demonstrate convenient notation and string interpolation
-s \%~\% 'println("Hello ${Sys.getenv("USER")}")'
+s \%~\% 'println("Hello @{Sys.getenv("USER")}")'
 intpEval(s,'println("Hello again")')             # Results printed to console
 intpEval(s,'println("Hello again")',quiet=TRUE)  # Console output is suppressed
 
@@ -145,12 +141,21 @@ s \%~\% 'println("Hello")'
 intpEval(s,'println("Hello")')
 intpEval(s,'println("Hello")',quiet=FALSE)  # But the default can be overridden
 
+# Get a reference to an R object
+myList <- list(a=2, b=matrix(1:8,nrow=2))
+wrappedList <- intpWrap(s,myList)
+identical(myList,intpUnwrap(s,wrappedList))
+s$.myList <- myList
+identical(myList,s$myList)
+
 # Instantiate an object
 seed <- 2349234L
+scalap(s,'scala.util.Random')
 rng <- s$do('scala.util.Random')$new(seed)  # Scala equivalent: new scala.util.Random(seed)
 
 # Call method of a reference
-rng$nextInt(100L)                        # Scala equivalent: rng.nextInt(100)
+system.time(rng$nextInt(100L))   # Scala equivalent: rng.nextInt(100)
+system.time(rng$nextInt(100L))   # Notice it runs much faster after the first time.
 
 # Call method of companion object and call methods of a reference
 # Scala equivalent: (scala.math.BigInt('777',8) - 500).intValue
@@ -163,9 +168,9 @@ drawGaussian(3,0.1)
 n.draws <- 100
 system.time({
   draws <- s \%~\% '
-    val result = new Array[Double](${n.draws})
+    val result = new Array[Double](@{n.draws})
     result(0) = rng.nextGaussian
-    for ( i <- 1 until ${n.draws} ) {
+    for ( i <- 1 until @{n.draws} ) {
       result(i) = 0.5*result(i-1) + rng.nextGaussian
     }
     result
