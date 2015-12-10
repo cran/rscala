@@ -1,3 +1,12 @@
+1.0.8 (2015-12-09)
+  * Put CRAN URL in canonical form.
+
+1.0.7 (2015-12-09)
+  * On Windows, fix problem embedding R within a JVM application.
+  * Fixed typographical error in documentation regarding 'strintrplt' function.
+  * Fixed bug causing warning 'closing unused connection ...'
+  * On Windows, also look at "...Wow6432Node..." registry key.
+
 1.0.6 (2015-05-15)
   * Removed unnecessary 'Suggests' and 'VignetteBuilder'
 

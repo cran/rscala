@@ -543,6 +543,8 @@ close.ScalaInterpreter <- function(con,...) {
   assign("open",FALSE,envir=con[['env']])
   wb(con,EXIT)
   flush(con[['socketIn']])
+  close(con[['socketOut']])
+  close(con[['socketIn']])
 }
 
 rscalaPackage <- function(pkgname) {
@@ -567,7 +569,7 @@ rscalaLoad <- function(classpath=NULL,...) {
 
 rscalaJar <- function(version="") {
   if ( version == "" ) major.version <- ".*"
-  else major.version = substr(version,1,4)
+  else major.version <- substr(version,1,4)
   list.files(system.file("java",package="rscala"),pattern=paste("rscala_",major.version,'-.*[0-9]\\.jar',sep=""),full.names=TRUE)
 }
 
@@ -615,6 +617,11 @@ javaCmd <- function(java.home=NULL,verbose=FALSE) {
     java.key <- "HKEY_LOCAL_MACHINE\\Software\\JavaSoft\\Java Runtime Environment"
     java.version <- readRegistryKey(java.key,"CurrentVersion")
     java.home <- readRegistryKey(sprintf("%s\\%s",java.key,java.version),"JavaHome")
+    if ( is.null(java.home) ) {
+      java.key <- "HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\JavaSoft\\Java Runtime Environment"
+      java.version <- readRegistryKey(java.key,"CurrentVersion")
+      java.home <- readRegistryKey(sprintf("%s\\%s",java.key,java.version),"JavaHome")
+    }
     if ( ! is.null(java.home) ) {
       candidate <- normalizePath(file.path(java.home,"bin",sprintf("java%s",ifelse(.Platform$OS=="windows",".exe",""))),mustWork=FALSE)
       if ( file.exists(candidate) ) { if ( verbose ) cat(successMsg,techniqueMsg,"\n",sep=""); return(candidate) }
