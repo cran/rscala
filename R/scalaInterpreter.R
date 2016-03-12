@@ -552,7 +552,7 @@ rscalaPackage <- function(pkgname) {
   E <- new.env(parent=environmentOfDependingPackage)
   E$initialized <- FALSE
   E$pkgname <- pkgname
-  E$jars <- list.files(system.file("java",package=pkgname),pattern=".*.jar",full.names=TRUE,recursive=TRUE)
+  E$jars <- list.files(system.file("java",package=pkgname),pattern=".*.jar$",full.names=TRUE,recursive=TRUE)
   assign("E",E,envir=environmentOfDependingPackage)
   invisible()
 }
@@ -570,7 +570,7 @@ rscalaLoad <- function(classpath=NULL,...) {
 rscalaJar <- function(version="") {
   if ( version == "" ) major.version <- ".*"
   else major.version <- substr(version,1,4)
-  list.files(system.file("java",package="rscala"),pattern=paste("rscala_",major.version,'-.*[0-9]\\.jar',sep=""),full.names=TRUE)
+  list.files(system.file("java",package="rscala"),pattern=paste("rscala_",major.version,'-.*[0-9]\\.jar$',sep=""),full.names=TRUE)
 }
 
 javaCmd <- function(java.home=NULL,verbose=FALSE) {
@@ -640,7 +640,7 @@ scalaInfoEngine <- function(scala.command,verbose) {
     tab <- "    - "
   }
   scala.home <- dirname(dirname(scala.command))
-  jars <- list.files(file.path(scala.home,"lib"),"*.jar",full.names=TRUE)
+  jars <- list.files(file.path(scala.home,"lib"),".*.jar$",full.names=TRUE)
   libraryJar <- jars[grepl("^scala-library",basename(jars))]
   if ( length(libraryJar) == 0 ) {
     if ( verbose ) cat(tab,sprintf("scala-library.jar is not in 'lib' directory of assumed Scala home (%s)\n",scala.home),sep="")
@@ -668,7 +668,7 @@ scalaInfoEngine <- function(scala.command,verbose) {
       if ( verbose ) cat(tab,"Cannot get 'scala.home' property from 'scala' script\n",sep="")
       return(NULL)
     }
-    jars <- list.files(file.path(scala.home,"lib"),"*.jar",full.names=TRUE)
+    jars <- list.files(file.path(scala.home,"lib"),".*.jar$",full.names=TRUE)
     libraryJar <- jars[grepl("^scala-library",basename(jars))]
     if ( length(libraryJar) == 0 ) {
       if ( verbose ) cat(tab,sprintf("scala-library.jar is not in 'lib' directory of purported Scala home (%s)\n",scala.home),sep="")
@@ -735,12 +735,12 @@ scalaInfo <- function(scala.home=NULL,verbose=FALSE) {
   if ( ! verbose ) scalaInfo(scala.home=scala.home,verbose=TRUE)
   else {
     cat("Cannot find a suitable Scala installation.\n\n")
-    f <- file(system.file(file.path("doc","README"),package="rscala"),open="r")
+    f <- file(system.file("README",package="rscala"),open="r")
     readme <- readLines(f)
     close(f)
     cat(readme,sep="\n")
     cat("\n")
-    NULL
+    invisible(NULL)
   }
 }
 
