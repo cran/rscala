@@ -1,7 +1,7 @@
-69ee9d74f2cdd7d1602c60a11f09ba48 *DESCRIPTION
+521e871aee90ae97a1654c04661834ac *DESCRIPTION
 dc076f8fa8b464ab8c543c21341763a9 *LICENSE
 8ab8bad34895290bb3da7cc5da8f6d50 *NAMESPACE
-3f64577ec384925b663ce11c9ed54c01 *NEWS
+782b9dec8e9356e10b330bac22ab099a *NEWS
 712acaa32ad23b86ef582e9200ce3a6d *R/common.R
 5c81d5b8c93f1a8bcc6ac3124d06cf62 *R/globals.R
 f5c1fcd548855b20ade97f9e2f16ce29 *R/protocol.R
@@ -11,10 +11,10 @@ d3ec9ec9faf4b27dbbf3e06326a30964 *R/zzz.R
 6ef7937ae98f5381d9322640cdab6668 *README
 6ef7937ae98f5381d9322640cdab6668 *inst/README
 768240977910812b40322b8b2b36aad4 *inst/bin/showArguments
-1f6cedf505edcbb351601b84df2e7193 *inst/java/rscala_2.10-1.0.11.jar
-31332ad46ad758d68379c0fe298c54f2 *inst/java/rscala_2.11-1.0.11.jar
-256559a379a611c75611d01d21b45204 *java/rscala_2.10-1.0.11-sources.jar
-685382abb7e8703a7f482f579832eb31 *java/rscala_2.11-1.0.11-sources.jar
+1714a79cb3d076418a2e5e507a67ee0a *inst/java/rscala_2.10-1.0.12.jar
+c972b3050260bb456b6c847eb1538f9b *inst/java/rscala_2.11-1.0.12.jar
+387f798622ec821e5e88ac913dfc3b57 *java/rscala_2.10-1.0.12-sources.jar
+17edd0b2fa3c56134901357c366c8f91 *java/rscala_2.11-1.0.12-sources.jar
 350fd08ab0e07660d78b4c99e99d441d *man/close.Rd
 09b149f1d441986cabd9c87fd8c4a7e0 *man/constructor.Rd
 558954198ba023996889f44bb3be67e2 *man/eval.Rd
