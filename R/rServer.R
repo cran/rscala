@@ -1,23 +1,27 @@
-rServe <- function(sockets) {
+rServe <- function(sockets,with.callbacks) {
   cc(sockets)
   workspace <- sockets[['workspace']]
   debug <- get("debug",envir=sockets[['env']])
   while ( TRUE ) {
-    if ( debug ) cat("R DEBUG: Top of the loop waiting for a command.\n")
-    cmd <- rb(sockets,integer(0))
-    if ( cmd == EXIT ) {
-      if ( debug ) cat("R DEBUG: Got EXIT\n")
-      return()
-    } else if ( cmd == DEBUG ) {
-      if ( debug ) cat("R DEBUG: Got DEBUG\n")
-      newDebug <- ( rb(sockets,integer(0)) != 0 )
-      if ( debug != newDebug ) cat("R DEBUG: Debugging is now ",newDebug,"\n",sep="")
-      debug <- newDebug
-      assign("debug",debug,envir=sockets[['env']])
-    } else if ( cmd == EVAL ) {
-      if ( debug ) cat("R DEBUG: Got EVAL\n")
+    if ( debug ) msg("R server at top of the loop waiting for a command.")
+    cmd <- rb(sockets,"integer")
+    if ( ( cmd == EVAL ) || ( cmd == EVALNAKED ) ) {
+      if ( debug ) msg("Got EVAL/EVALNAKED: ",cmd)
       snippet <- rc(sockets)
-      output <- capture.output(result <- try(eval(parse(text=snippet),envir=workspace)))
+      if ( cmd == EVAL ) {
+        output <- NULL
+        file <- textConnection("output","w",local=TRUE)
+        sink(file)
+        sink(file,type="message")
+        result <- try(eval(parse(text=snippet),envir=workspace))
+        sink(type="message")
+        sink()
+        close(file)
+      } else {
+        result <- try(eval(parse(text=snippet),envir=workspace))
+        output <- character()
+      }
+      if ( with.callbacks ) wb(sockets,EXIT)
       if ( inherits(result,"try-error") ) {
         wb(sockets,ERROR)
         msg <- paste(c(output,attr(result,"condition")$message),collapse="\n")
@@ -29,40 +33,40 @@ rServe <- function(sockets) {
       }
       assign(".rscala.last.value",result,envir=workspace)
     } else if ( cmd %in% c(SET,SET_SINGLE,SET_DOUBLE) ) {
-      if ( debug ) cat("R DEBUG: Got SET\n")
+      if ( debug ) msg("Got SET")
       if ( cmd != SET ) index <- rc(sockets)
       identifier <- rc(sockets)
-      dataStructure <- rb(sockets,integer(0))
+      dataStructure <- rb(sockets,"integer")
       if ( dataStructure == NULLTYPE ) {
         if ( cmd == SET ) assign(identifier,NULL,envir=workspace)
         else subassign(sockets,identifier,index,NULL,cmd==SET_SINGLE)
       } else if ( dataStructure == ATOMIC ) {
-        dataType <- rb(sockets,integer(0))
-        if ( dataType == INTEGER ) value <- rb(sockets,integer(0))
-        else if ( dataType == DOUBLE ) value <- rb(sockets,double(0))
-        else if ( dataType == BOOLEAN ) value <- rb(sockets,integer(0)) != 0
+        dataType <- rb(sockets,"integer")
+        if ( dataType == INTEGER ) value <- rb(sockets,"integer")
+        else if ( dataType == DOUBLE ) value <- rb(sockets,"double")
+        else if ( dataType == BOOLEAN ) value <- rb(sockets,"integer") != 0
         else if ( dataType == STRING ) value <- rc(sockets)
         else stop(paste("Unknown data type:",dataType))
         if ( cmd == SET ) assign(identifier,value,envir=workspace)
         else subassign(sockets,identifier,index,value,cmd==SET_SINGLE)
       } else if ( dataStructure == VECTOR ) {
-        dataLength <- rb(sockets,integer(0))
-        dataType <- rb(sockets,integer(0))
-        if ( dataType == INTEGER ) value <- rb(sockets,integer(0),n=dataLength)
-        else if ( dataType == DOUBLE ) value <- rb(sockets,double(0),n=dataLength)
-        else if ( dataType == BOOLEAN ) value <- rb(sockets,integer(0),n=dataLength) != 0
+        dataLength <- rb(sockets,"integer")
+        dataType <- rb(sockets,"integer")
+        if ( dataType == INTEGER ) value <- rb(sockets,"integer",n=dataLength)
+        else if ( dataType == DOUBLE ) value <- rb(sockets,"double",n=dataLength)
+        else if ( dataType == BOOLEAN ) value <- rb(sockets,"integer",n=dataLength) != 0
         else if ( dataType == STRING ) value <- sapply(1:dataLength,function(i) rc(sockets))
         else stop(paste("Unknown data type:",dataType))
         if ( cmd == SET ) assign(identifier,value,envir=workspace)
         else subassign(sockets,identifier,index,value,cmd==SET_SINGLE)
       } else if ( dataStructure == MATRIX ) {
-        dataNRow <- rb(sockets,integer(0))
-        dataNCol <- rb(sockets,integer(0))
+        dataNRow <- rb(sockets,"integer")
+        dataNCol <- rb(sockets,"integer")
         dataLength <- dataNRow * dataNCol
-        dataType <- rb(sockets,integer(0))
-        if ( dataType == INTEGER ) value <- matrix(rb(sockets,integer(0),n=dataLength),nrow=dataNRow,byrow=TRUE)
-        else if ( dataType == DOUBLE ) value <- matrix(rb(sockets,double(0),n=dataLength),nrow=dataNRow,byrow=TRUE)
-        else if ( dataType == BOOLEAN ) value <- matrix(rb(sockets,integer(0),n=dataLength),nrow=dataNRow,byrow=TRUE) != 0
+        dataType <- rb(sockets,"integer")
+        if ( dataType == INTEGER ) value <- matrix(rb(sockets,"integer",n=dataLength),nrow=dataNRow,byrow=TRUE)
+        else if ( dataType == DOUBLE ) value <- matrix(rb(sockets,"double",n=dataLength),nrow=dataNRow,byrow=TRUE)
+        else if ( dataType == BOOLEAN ) value <- matrix(rb(sockets,"integer",n=dataLength),nrow=dataNRow,byrow=TRUE) != 0
         else if ( dataType == STRING ) value <- matrix(sapply(1:dataLength,function(i) rc(sockets)),nrow=dataNRow,byrow=TRUE)
         else stop(paste("Unknown data type:",dataType))
         if ( cmd == SET ) assign(identifier,value,envir=workspace)
@@ -79,7 +83,7 @@ rServe <- function(sockets) {
         }
       } else stop(paste("Unknown data structure:",dataStructure))
     } else if ( cmd == GET ) {
-      if ( debug ) cat("R DEBUG: Got GET\n")
+      if ( debug ) msg("Got GET")
       identifier <- rc(sockets)
       value <- tryCatch(get(identifier,envir=workspace),error=function(e) e)
       if ( is.null(value) ) {
@@ -119,7 +123,7 @@ rServe <- function(sockets) {
         wb(sockets,UNSUPPORTED_STRUCTURE)
       }
     } else if ( cmd == GET_REFERENCE ) {
-      if ( debug ) cat("R DEBUG: Got GET_REFERENCE\n")
+      if ( debug ) msg("Got GET_REFERENCE")
       identifier <- rc(sockets)
       value <- tryCatch(get(identifier,envir=workspace),error=function(e) e)
       if ( inherits(value,"error") ) {
@@ -129,8 +133,20 @@ rServe <- function(sockets) {
         wc(sockets,new.reference(value,workspace$.))
       }
     } else if ( cmd == GC ) {
-      if ( debug ) cat("R DEBUG: Got GC\n")
+      if ( debug ) msg("Got GC")
       workspace$. <- new.env(parent=workspace)
+    } else if ( cmd == SHUTDOWN ) {
+      if ( debug ) msg("Got SHUTDOWN")
+      return()
+    } else if ( cmd == EXIT ) {
+      if ( debug ) msg("Got EXIT")
+      return()
+    } else if ( cmd == DEBUG ) {
+      if ( debug ) msg("Got DEBUG")
+      newDebug <- ( rb(sockets,"integer") != 0 )
+      if ( debug != newDebug ) msg("Debugging is now ",newDebug,"\n",sep="")
+      debug <- newDebug
+      assign("debug",debug,envir=sockets[['env']])
     } else stop(paste("Unknown command:",cmd))
     flush(sockets[['socketIn']])
   }
@@ -140,7 +156,14 @@ subassign <- function(sockets,x,i,value,single=TRUE) {
   workspace <- sockets[['workspace']]
   assign(".rscala.set.value",value,envir=workspace)
   brackets <- if ( single ) c("[","]") else c("[[","]]")
-  output <- capture.output(result <- try(eval(parse(text=paste0(x,brackets[1],i,brackets[2]," <- .rscala.set.value")),envir=workspace)))
+  output <- NULL
+  file <- textConnection("output","w",local=TRUE)
+  sink(file)
+  sink(file,type="message")
+  result <- try(eval(parse(text=paste0(x,brackets[1],i,brackets[2]," <- .rscala.set.value")),envir=workspace))
+  sink(type="message")
+  sink()
+  close(file)
   if ( inherits(result,"try-error") ) {
     wb(sockets,ERROR)
     output <- paste(paste(output,collapse="\n"),paste(attr(result,"condition")$message,collapse="\n"),sep="\n")
