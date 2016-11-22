@@ -1,44 +1,37 @@
 ## Scala scripting over TCP/IP
 
-scalaInterpreter <- function(classpath=character(0),scala.home=NULL,heap.maximum="256M",command.line.options=NULL,timeout=60,debug=FALSE,serialize=.Platform$OS.type == "windows") {
+scala <- function(classpath=character(0),serialize=FALSE,scala.home=NULL,heap.maximum=NULL,command.line.options=NULL,timeout=60,debug=FALSE,stdout=TRUE,stderr=TRUE) {
+  if ( identical(stdout,TRUE) ) stdout <- ""
+  if ( identical(stderr,TRUE) ) stderr <- ""
+  debug <- identical(debug,TRUE)
+  serialize <- identical(serialize,TRUE)
+  if ( debug && serialize ) stop("When debug==TRUE, serialize must be FALSE.")
+  if ( debug && ( identical(stdout,FALSE) || identical(stdout,NULL) || identical(stderr,FALSE) || identical(stderr,NULL) ) ) stop("When debug==TRUE, stdout and stderr must not be discarded.")
   userJars <- unlist(strsplit(classpath,.Platform$path.sep))
   if ( is.null(command.line.options) ) {
-    command.line.options <- paste("-J",c(paste("-Xmx",heap.maximum,sep=""),"-Xms32M"),sep="")
+    command.line.options <- getOption("rscala.command.line.options",default=NULL)
+    if ( is.null(command.line.options) ) {
+      if ( is.null(heap.maximum) ) {
+        heap.maximum <- getOption("rscala.heap.maximum",default=NULL)
+      }
+      if ( !is.null(heap.maximum) ) {
+        command.line.options <- paste("-J",c(paste("-Xmx",heap.maximum,sep=""),"-Xms32M"),sep="")
+      }
+    }
   }
   sInfo <- scalaInfo(scala.home)
   if ( is.null(sInfo) ) stop("Cannot find a suitable Scala installation.  Please manually install Scala or run 'scalaInstall()'.")
-  rsJar <- rscalaJar(sInfo$version)
+  rsJar <- .rscalaJar(sInfo$version)
   rsClasspath <- shQuote(paste(c(rsJar,userJars),collapse=.Platform$path.sep))
   portsFilename <- tempfile("rscala-")
-  bootstrap.filename <- tempfile("rscala-")
-  bootstrap.file <- file(bootstrap.filename, "w")
-  debug <- ifelse(is.null(debug) || is.nan(debug) || is.na(debug) || !debug, FALSE, TRUE)
-  serialize <- ifelse(is.null(serialize) || is.nan(serialize) || is.na(serialize) || !serialize, FALSE, TRUE)
-  bootstrap.lines <- c(
-    ':silent',
-    sprintf('org.ddahl.rscala.ScalaServer(org.ddahl.rscala.ScalaInterpreterAdapter($intp),raw"%s",%s,%s).run()',portsFilename,ifelse(debug,'true','false'),ifelse(serialize,'true','false')),
-    'sys.exit(0)'
-  )
-  writeLines(bootstrap.lines,bootstrap.file)
-  close(bootstrap.file)
-  args <- c(command.line.options,"-Xnojline","-howtorun:script","-classpath",rsClasspath,paste("-Drscala.classpath=",rsClasspath,sep=""),"-i",bootstrap.filename)
+  args <- c(command.line.options,"-classpath",rsClasspath,"org.ddahl.rscala.Main",portsFilename,debug,serialize)
   if ( debug ) msg("\n",sInfo$cmd)
   if ( debug ) msg("\n",paste0("<",args,">",collapse="\n"))
-  stdin <- ""
-  if ( debug && ( .Platform$OS.type == "windows" ) ) {
-    stdout <- "RSCALA-STDOUT.txt"
-    stderr <- "RSCALA-STDERR.txt"
-  } else {
-    stdout <- ""
-    stderr <- ""
-  }
-  system2(sInfo$cmd,args,wait=FALSE,stdin=stdin,stdout=stdout,stderr=stderr)
+  system2(sInfo$cmd,args,wait=FALSE,stdout=stdout,stderr=stderr)
   sockets <- newSockets(portsFilename,debug,serialize,timeout)
-  sockets[['scalaInfo']] <- sInfo
   assign("callbackNameCounter",0L,envir=sockets[['env']])
   assign("markedForGC",integer(0),envir=sockets[['env']])
-  intpSettings(sockets,interpolate=TRUE,length.one.as.vector=FALSE)
-  if ( .Platform$OS.type != "windows" ) file.remove(bootstrap.filename)   # Would fail on Windows because the file is still open by Scala.
+  scalaSettings(sockets,interpolate=TRUE,length.one.as.vector=FALSE)
   sockets
 }
 
@@ -76,19 +69,26 @@ newSockets <- function(portsFilename,debug,serialize,timeout) {
   result
 }
 
-intpEval.ScalaInterpreter <- function(interpreter,snippet,interpolate="") {
+scalaEval <- function(interpreter,snippet,interpolate="") {
   cc(interpreter)
   if ( get("debug",envir=interpreter[['env']]) ) msg('Sending EVAL request.')
   snippet <- paste(snippet,collapse="\n")
   if ( ( ( interpolate == "" ) && ( get("interpolate",envir=interpreter[['env']]) ) ) || ( interpolate == TRUE ) ) {
     snippet <- strintrplt(snippet,parent.frame())
   }
-  wb(interpreter,EVAL)
-  wc(interpreter,snippet)
-  flush(interpreter[['socketIn']])
-  rServe(interpreter,TRUE)
-  status <- rb(interpreter,"integer")
-  if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
+  tryCatch({
+    wb(interpreter,EVAL)
+    wc(interpreter,snippet)
+    flush(interpreter[['socketIn']])
+    rServe(interpreter,TRUE)
+    status <- rb(interpreter,"integer")
+    if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
+  }, interrupt = function(x) {
+    assign("open",FALSE,envir=interpreter[['env']])
+    close(interpreter[['socketOut']])
+    close(interpreter[['socketIn']])
+    message("Interpreter closed by interrupt.")
+  })
   if ( ( length(status) == 0 ) || ( status != OK ) ) stop("Error in evaluation.")
   else invisible(NULL)
 }
@@ -121,7 +121,7 @@ intpEval.ScalaInterpreter <- function(interpreter,snippet,interpolate="") {
   if ( get("interpolate",envir=interpreter[['env']]) ) {
     snippet <- strintrplt(snippet,parent.frame())
   }
-  intpEval(interpreter,snippet)
+  scalaEval(interpreter,snippet)
 }
 
 print.ScalaInterpreter <- function(x,...) {
@@ -159,7 +159,7 @@ toString.ScalaInterpreterItem <- function(x,...) {
   "ScalaInterpreterItem"
 }
 
-"$.ScalaInterpreterReference" <- function(reference,methodName) {
+'$.ScalaInterpreterReference' <- function(reference,methodName) {
   type <- reference[['type']]
   functionCache <- reference[['interpreter']][['functionCache']]
   env <- reference[['interpreter']][['env']]
@@ -174,9 +174,9 @@ toString.ScalaInterpreterItem <- function(x,...) {
     key <- paste0(type,"$",methodName,"#",paste(types,collapse=","))
     if ( ! exists(key,envir=functionCache) ) {
       f <- if ( nArgs == 0 ) {
-        intpDef(reference[['interpreter']],'',paste0('rscalaReference.',methodName),reference=reference)
+        scalaDef(reference[['interpreter']],'',paste0('rscalaReference.',methodName),reference=reference)
       } else {
-        intpDef(reference[['interpreter']],argsStr,paste0('rscalaReference.',methodName,"(",namesStr,")"),reference=reference)
+        scalaDef(reference[['interpreter']],argsStr,paste0('rscalaReference.',methodName,"(",namesStr,")"),reference=reference)
       }
       assign(key,f,envir=functionCache)
     } else {
@@ -188,7 +188,7 @@ toString.ScalaInterpreterItem <- function(x,...) {
   }
 }
 
-"$.ScalaInterpreterItem" <- function(item,methodName) {
+'$.ScalaInterpreterItem' <- function(item,methodName) {
   interpreter <- item[['interpreter']]
   type <- item[['item.name']]
   functionCache <- interpreter[['functionCache']]
@@ -205,15 +205,15 @@ toString.ScalaInterpreterItem <- function(x,...) {
     if ( ! exists(key,envir=functionCache) ) {
       f <- if ( nArgs == 0 ) {
         if ( methodName == "new" ) {
-          intpDef(interpreter,'',paste0('new ',type))
+          scalaDef(interpreter,'',paste0('new ',type))
         } else {
-          intpDef(interpreter,'',paste0(type,'.',methodName))
+          scalaDef(interpreter,'',paste0(type,'.',methodName))
         }
       } else {
         if ( methodName == "new" ) {
-          intpDef(interpreter,argsStr,paste0('new ',type,"(",namesStr,")"))
+          scalaDef(interpreter,argsStr,paste0('new ',type,"(",namesStr,")"))
         } else {
-          intpDef(interpreter,argsStr,paste0(type,'.',methodName,"(",namesStr,")"))
+          scalaDef(interpreter,argsStr,paste0(type,'.',methodName,"(",namesStr,")"))
         }
       }
       assign(key,f,envir=functionCache)
@@ -225,101 +225,108 @@ toString.ScalaInterpreterItem <- function(x,...) {
   }
 }
 
-intpGet.ScalaInterpreter <- function(interpreter,identifier,as.reference=NA) {
+scalaGet <- function(interpreter,identifier,as.reference=NA) {
   cc(interpreter)
-  if ( ( ! is.na(as.reference) ) && ( as.reference ) ) {
-    if ( inherits(identifier,"ScalaInterpreterReference") ) return(identifier)
-    if ( get("debug",envir=interpreter[['env']]) ) msg('Sending GET_REFERENCE request.')
-    wb(interpreter,GET_REFERENCE)
-    wc(interpreter,as.character(identifier[1]))
+  tryCatch({
+    if ( ( ! is.na(as.reference) ) && ( as.reference ) ) {
+      if ( inherits(identifier,"ScalaInterpreterReference") ) return(identifier)
+      if ( get("debug",envir=interpreter[['env']]) ) msg('Sending GET_REFERENCE request.')
+      wb(interpreter,GET_REFERENCE)
+      wc(interpreter,as.character(identifier[1]))
+      flush(interpreter[['socketIn']])
+      response <- rb(interpreter,"integer")
+      if ( response == OK ) {
+        id <- rc(interpreter)
+        type <- rc(interpreter)
+        env <- if ( substr(id,1,1) == "." ) {
+          env <- new.env()
+          reg.finalizer(env,function(e) {
+            assign("markedForGC",c(as.integer(substring(id,2)),get("markedForGC",interpreter[['env']])),interpreter[['env']])
+          })
+          env
+        } else NULL
+        if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
+        result <- list(interpreter=interpreter,identifier=id,type=type,env=env)
+        class(result) <- "ScalaInterpreterReference"
+        return(result)
+      } else if ( response == ERROR ) {
+        if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
+        stop(paste("Exception thrown.",sep=""))
+      } else if ( response == UNDEFINED_IDENTIFIER ) {
+        if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
+        stop(paste("Undefined identifier: ",identifier[1],sep=""))
+      } else stop("Protocol error.")
+    }
+    i <- if ( inherits(identifier,"ScalaInterpreterReference") ) identifier[['identifier']] else as.character(identifier[1])
+    if ( get("debug",envir=interpreter[['env']]) ) msg('Sending GET request.')
+    wb(interpreter,GET)
+    wc(interpreter,i)
     flush(interpreter[['socketIn']])
-    response <- rb(interpreter,"integer")
-    if ( response == OK ) {
-      id <- rc(interpreter)
-      type <- rc(interpreter)
-      env <- if ( substr(id,1,1) == "." ) {
-        env <- new.env()
-        reg.finalizer(env,function(e) {
-          assign("markedForGC",c(as.integer(substring(id,2)),get("markedForGC",interpreter[['env']])),interpreter[['env']])
-        })
-        env
-      } else NULL
-      if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
-      result <- list(interpreter=interpreter,identifier=id,type=type,env=env)
-      class(result) <- "ScalaInterpreterReference"
-      return(result)
-    } else if ( response == ERROR ) {
+    dataStructure <- rb(interpreter,"integer")
+    value <- if ( dataStructure == NULLTYPE ) {
+      NULL
+    } else if ( dataStructure == ATOMIC ) {
+      dataType <- rb(interpreter,"integer")
+      if ( dataType == STRING ) {
+        rc(interpreter)
+      } else {
+        v <- rb(interpreter,typeMap[[dataType]])
+        if ( dataType == BOOLEAN ) as.logical(v)
+        else v
+      }
+    } else if ( dataStructure == VECTOR ) {
+      length <- rb(interpreter,"integer")
+      dataType <- rb(interpreter,"integer")
+      if ( dataType == STRING ) {
+        if ( length > 0 ) sapply(1:length,function(x) rc(interpreter))
+        else character(0)
+      } else {
+        v <- rb(interpreter,typeMap[[dataType]],length)
+        if ( dataType == BOOLEAN ) as.logical(v)
+        else v
+      }
+    } else if ( dataStructure == MATRIX ) {
+      dim <- rb(interpreter,"integer",2L)
+      dataType <- rb(interpreter,"integer")
+      if ( dataType == STRING ) {
+        v <- matrix("",nrow=dim[1],ncol=dim[2])
+        if ( dim[1] > 0 ) for ( i in 1:dim[1] ) {
+          if ( dim[2] > 0 ) for ( j in 1:dim[2] ) {
+            v[i,j] <- rc(interpreter)
+          }
+        }
+        v
+      } else {
+        v <- matrix(rb(interpreter,typeMap[[dataType]],dim[1]*dim[2]),nrow=dim[1],byrow=TRUE)
+        if ( dataType == BOOLEAN ) mode(v) <- "logical"
+        v
+      }
+    } else if ( dataStructure == REFERENCE ) {
+      itemName <- rc(interpreter)
+      get(itemName,envir=interpreter[['workspace']]$.)
+    } else if ( dataStructure == ERROR ) {
       if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
       stop(paste("Exception thrown.",sep=""))
-    } else if ( response == UNDEFINED_IDENTIFIER ) {
+    } else if ( dataStructure == UNDEFINED_IDENTIFIER ) {
       if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
-      stop(paste("Undefined identifier: ",identifier[1],sep=""))
-    } else stop("Protocol error.")
-  }
-  i <- if ( inherits(identifier,"ScalaInterpreterReference") ) identifier[['identifier']] else as.character(identifier[1])
-  if ( get("debug",envir=interpreter[['env']]) ) msg('Sending GET request.')
-  wb(interpreter,GET)
-  wc(interpreter,i)
-  flush(interpreter[['socketIn']])
-  dataStructure <- rb(interpreter,"integer")
-  value <- if ( dataStructure == NULLTYPE ) {
-    NULL
-  } else if ( dataStructure == ATOMIC ) {
-    dataType <- rb(interpreter,"integer")
-    if ( dataType == STRING ) {
-      rc(interpreter)
-    } else {
-      v <- rb(interpreter,typeMap[[dataType]])
-      if ( dataType == BOOLEAN ) as.logical(v)
-      else v
-    }
-  } else if ( dataStructure == VECTOR ) {
-    length <- rb(interpreter,"integer")
-    dataType <- rb(interpreter,"integer")
-    if ( dataType == STRING ) {
-      if ( length > 0 ) sapply(1:length,function(x) rc(interpreter))
-      else character(0)
-    } else {
-      v <- rb(interpreter,typeMap[[dataType]],length)
-      if ( dataType == BOOLEAN ) as.logical(v)
-      else v
-    }
-  } else if ( dataStructure == MATRIX ) {
-    dim <- rb(interpreter,"integer",2L)
-    dataType <- rb(interpreter,"integer")
-    if ( dataType == STRING ) {
-      v <- matrix("",nrow=dim[1],ncol=dim[2])
-      if ( dim[1] > 0 ) for ( i in 1:dim[1] ) {
-        if ( dim[2] > 0 ) for ( j in 1:dim[2] ) {
-          v[i,j] <- rc(interpreter)
-        }
+      stop(paste("Undefined identifier: ",i,sep=""))
+    } else if ( dataStructure == UNSUPPORTED_STRUCTURE ) {
+      if ( is.na(as.reference) ) {
+        if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
+        return(scalaGet(interpreter,identifier,as.reference=TRUE))
+      } else {
+        if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
+        stop("Unsupported data structure.")
       }
-      v
-    } else {
-      v <- matrix(rb(interpreter,typeMap[[dataType]],dim[1]*dim[2]),nrow=dim[1],byrow=TRUE)
-      if ( dataType == BOOLEAN ) mode(v) <- "logical"
-      v
-    }
-  } else if ( dataStructure == REFERENCE ) {
-    itemName <- rc(interpreter)
-    get(itemName,envir=interpreter[['workspace']]$.)
-  } else if ( dataStructure == ERROR ) {
+    } else stop("Protocol error.")
     if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
-    stop(paste("Exception thrown.",sep=""))
-  } else if ( dataStructure == UNDEFINED_IDENTIFIER ) {
-    if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
-    stop(paste("Undefined identifier: ",i,sep=""))
-  } else if ( dataStructure == UNSUPPORTED_STRUCTURE ) {
-    if ( is.na(as.reference) ) {
-      if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
-      return(intpGet(interpreter,identifier,as.reference=TRUE))
-    } else {
-      if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
-      stop("Unsupported data structure.")
-    }
-  } else stop("Protocol error.")
-  if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
-  value
+    value
+  }, interrupt = function(x) {
+    assign("open",FALSE,envir=interpreter[['env']])
+    close(interpreter[['socketOut']])
+    close(interpreter[['socketIn']])
+    message("Interpreter closed by interrupt.")
+  })
 }
 
 '$.ScalaInterpreter' <- function(interpreter,identifier) {
@@ -330,28 +337,30 @@ intpGet.ScalaInterpreter <- function(interpreter,identifier,as.reference=NA) {
       args <- strintrplt(args,parent.frame())
       body <- strintrplt(body,parent.frame())
     }
-    intpDef(interpreter,args,body,interpolate=FALSE)
-  } else if ( identifier == "callback" ) function(argsType,returnType,func,captureOutput=FALSE) {
+    scalaDef(interpreter,args,body,interpolate=FALSE)
+  } else if ( identifier == "callback" ) function(argsType,returnType,func) {
     if ( get("interpolate",envir=interpreter[['env']]) ) {
       argsType <- sapply(argsType,function(x) strintrplt(x,parent.frame()))
       returnType <- strintrplt(returnType,parent.frame())
     }
-    intpCallback(interpreter,argsType,returnType,func,interpolate=FALSE,captureOutput=captureOutput)
+    scalaCallback(interpreter,argsType,returnType,func,interpolate=FALSE)
   } else if ( identifier == "do" ) function(item.name) {
     result <- list(interpreter=interpreter,item.name=item.name)
     class(result) <- "ScalaInterpreterItem"
     result
   } else if ( identifier == "val" ) function(x) {
-    intpGet(interpreter,x)
+    scalaGet(interpreter,x)
   } else if ( identifier == ".val" ) function(x) {
-    intpGet(interpreter,x,as.reference=TRUE)
+    scalaGet(interpreter,x,as.reference=TRUE)
   } else if ( substring(identifier,1,1) == "." ) {
     identifier = substring(identifier,2)
-    if ( identifier == "" ) intpGet(interpreter,".")
-    else if ( identifier == "." ) intpGet(interpreter,".",as.reference=TRUE)
-    else intpGet(interpreter,identifier,as.reference=TRUE)
+    if ( identifier == "" ) scalaGet(interpreter,".")
+    else if ( identifier == "." ) scalaGet(interpreter,".",as.reference=TRUE)
+    else scalaGet(interpreter,identifier,as.reference=TRUE)
+  } else if ( identifier %in% names(interpreter) ) {
+    "This item is not user accessible."
   } else {
-    intpGet(interpreter,identifier)
+    scalaGet(interpreter,identifier)
   }
 }
 
@@ -369,64 +378,71 @@ deduceType <- function(value,length.one.as.vector) {
   }
 }
 
-intpSet.ScalaInterpreter <- function(interpreter,identifier,value,length.one.as.vector="") {
+scalaSet <- function(interpreter,identifier,value,length.one.as.vector="") {
   cc(interpreter)
-  if ( inherits(value,"ScalaInterpreterReference") ) {
-    if ( get("debug",envir=interpreter[['env']]) ) msg("Sending SET request.")
-    wb(interpreter,SET)
-    wc(interpreter,identifier)
-    wb(interpreter,REFERENCE)
-    wc(interpreter,value[['identifier']])
-    flush(interpreter[['socketIn']])
-    status <- rb(interpreter,"integer")
-    if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
-    if ( status == ERROR ) {
-      stop("Setting error.")
-    }
-  } else {
-    if ( ! is.atomic(value) ) stop("Data structure is not supported.")
-    if ( is.vector(value) ) {
-      type <- checkType(value)
+  tryCatch({
+    if ( inherits(value,"ScalaInterpreterReference") ) {
       if ( get("debug",envir=interpreter[['env']]) ) msg("Sending SET request.")
       wb(interpreter,SET)
       wc(interpreter,identifier)
-      if ( ( length(value) == 1 ) && ( ( ( length.one.as.vector == "" ) && ( ! get("length.one.as.vector",envir=interpreter[['env']]) ) ) || length.one.as.vector == FALSE ) ) {
-        wb(interpreter,ATOMIC)
-      } else {
-        wb(interpreter,VECTOR)
-        wb(interpreter,length(value))
+      wb(interpreter,REFERENCE)
+      wc(interpreter,value[['identifier']])
+      flush(interpreter[['socketIn']])
+      status <- rb(interpreter,"integer")
+      if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
+      if ( status == ERROR ) {
+        stop("Setting error.")
       }
-      wb(interpreter,type)
-      if ( type == STRING ) {
-        if ( length(value) > 0 ) for ( i in 1:length(value) ) wc(interpreter,value[i])
-      } else {
-        if ( type == BOOLEAN ) wb(interpreter,as.integer(value))
-        else wb(interpreter,value)
-      }
-    } else if ( is.matrix(value) ) {
-      type <- checkType(value)
-      if ( get("debug",envir=interpreter[['env']]) ) msg("Sending SET request.")
-      wb(interpreter,SET)
-      wc(interpreter,identifier)
-      wb(interpreter,MATRIX)
-      wb(interpreter,dim(value))
-      wb(interpreter,type)
-      if ( nrow(value) > 0 ) for ( i in 1:nrow(value) ) {
-        if ( type == STRING ) {
-          if ( ncol(value) > 0 ) for ( j in 1:ncol(value) ) wc(interpreter,value[i,j])
+    } else {
+      if ( ! is.atomic(value) ) stop("Data structure is not supported.")
+      if ( is.vector(value) ) {
+        type <- checkType(value)
+        if ( get("debug",envir=interpreter[['env']]) ) msg("Sending SET request.")
+        wb(interpreter,SET)
+        wc(interpreter,identifier)
+        if ( ( length(value) == 1 ) && ( ( ( length.one.as.vector == "" ) && ( ! get("length.one.as.vector",envir=interpreter[['env']]) ) ) || length.one.as.vector == FALSE ) ) {
+          wb(interpreter,ATOMIC)
+        } else {
+          wb(interpreter,VECTOR)
+          wb(interpreter,length(value))
         }
-        else if ( type == BOOLEAN ) wb(interpreter,as.integer(value[i,]))
-        else wb(interpreter,value[i,])
-      }
-    } else if ( is.null(value) ) {
-      if ( get("debug",envir=interpreter[['env']]) ) msg("Sending SET request.")
-      wb(interpreter,SET)
-      wc(interpreter,identifier)
-      wb(interpreter,NULLTYPE)
-    } else stop("Data structure is not supported.")
-    flush(interpreter[['socketIn']])
-    if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
-  }
+        wb(interpreter,type)
+        if ( type == STRING ) {
+          if ( length(value) > 0 ) for ( i in 1:length(value) ) wc(interpreter,value[i])
+        } else {
+          if ( type == BOOLEAN ) wb(interpreter,as.integer(value))
+          else wb(interpreter,value)
+        }
+      } else if ( is.matrix(value) ) {
+        type <- checkType(value)
+        if ( get("debug",envir=interpreter[['env']]) ) msg("Sending SET request.")
+        wb(interpreter,SET)
+        wc(interpreter,identifier)
+        wb(interpreter,MATRIX)
+        wb(interpreter,dim(value))
+        wb(interpreter,type)
+        if ( nrow(value) > 0 ) for ( i in 1:nrow(value) ) {
+          if ( type == STRING ) {
+            if ( ncol(value) > 0 ) for ( j in 1:ncol(value) ) wc(interpreter,value[i,j])
+          }
+          else if ( type == BOOLEAN ) wb(interpreter,as.integer(value[i,]))
+          else wb(interpreter,value[i,])
+        }
+      } else if ( is.null(value) ) {
+        if ( get("debug",envir=interpreter[['env']]) ) msg("Sending SET request.")
+        wb(interpreter,SET)
+        wc(interpreter,identifier)
+        wb(interpreter,NULLTYPE)
+      } else stop("Data structure is not supported.")
+      flush(interpreter[['socketIn']])
+      if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
+    }
+  }, interrupt = function(x) {
+    assign("open",FALSE,envir=interpreter[['env']])
+    close(interpreter[['socketOut']])
+    close(interpreter[['socketIn']])
+    message("Interpreter closed by interrupt.")
+  })
   invisible()
 }
 
@@ -434,176 +450,201 @@ intpSet.ScalaInterpreter <- function(interpreter,identifier,value,length.one.as.
   cc(interpreter)
   if ( substring(identifier,1,1) == "." ) {
     identifier = substring(identifier,2)
-    intpSet(interpreter,identifier,intpWrap(interpreter,value))
+    scalaSet(interpreter,identifier,scalaWrap(interpreter,value))
   } else {
-    intpSet(interpreter,identifier,value)
+    scalaSet(interpreter,identifier,value)
   }
   interpreter
 }
 
-# intpCallback.ScalaInterpreter <- function(interpreter,argsType,returnType,func,interpolate="",captureOutput=FALSE) {
-#   cc(interpreter)
-#   if ( length(argsType) != length(formals(func)) ) stop("The length of 'argsType' must match the number of arguments of 'func'.")
-#   if ( length(returnType) != 1 ) stop("The length of 'returnType' must be exactly one.")
-#   X <- c("I","D","B","S")
-#   Y <- c("0","1","2")
-#   validReturnTypes <- c(paste(rep(X,each=length(Y)),rep(Y,times=length(X)),sep=""),"R")
-#   if ( ! ( returnType %in% validReturnTypes ) ) stop(paste("Unrecognized 'returnType'.  Valid values are: ",paste(validReturnTypes,collapse=", "),sep=""))
-#   if ( ( ( interpolate == "" ) && ( get("interpolate",envir=interpreter[['env']]) ) ) || ( interpolate == TRUE ) ) {
-#     argsType <- sapply(argsType,function(x) strintrplt(x,parent.frame()))
-#     returnType <- strintrplt(returnType,parent.frame())
-#   }
-#   functionNumber <- get("callbackNameCounter",envir=interpreter[['env']])
-#   functionName <- paste(".f",functionNumber,sep="")
-#   assign("callbackNameCounter",functionNumber+1L,envir=interpreter[['env']])
-#   assign(functionName,func,envir=interpreter[['workspace']])
-#   xs <- paste("x",1:length(argsType),sep="")
-#   argsScala <- paste(paste(xs,argsType,sep=": "),collapse=", ")
-#   sets <- paste(paste('R.set(".',xs,'",',xs,')',sep=""),collapse="\n")
-#   argsR <- paste(".",xs,sep="",collapse=",")
-#   snippet <- sprintf('(%s) => {
-#     locally {
-#       %s
-#       val captureOutput = R.captureOutput
-#       R.captureOutput = @{ifelse(captureOutput,"true","false")}
-#       val result = R.eval%s("%s(%s)")
-#       R.captureOutput = captureOutput
-#       result
-#     }
-#   }',argsScala,sets,returnType,functionName,argsR)
-#   snippet <- strintrplt(snippet,parent.frame())
-#   result <- evalAndGet(interpreter,snippet,TRUE)
-#   if ( is.null(result) ) invisible(result)
-#   else result
-# }
-
-intpDef.ScalaInterpreter <- function(interpreter,args,body,interpolate="",reference=NULL) {
+scalaCallback <- function(interpreter,argsType,returnType,func,interpolate="") {
   cc(interpreter)
-  tmpFunc <- NULL
-  args <- gsub("^\\s+$","",args)
-  body <- paste(body,collapse="\n")
+  if ( length(argsType) != length(formals(func)) ) stop("The length of 'argsType' must match the number of arguments of 'func'.")
+  if ( length(returnType) != 1 ) stop("The length of 'returnType' must be exactly one.")
+  X <- c("I","D","B","S")
+  Y <- c("0","1","2")
+  validReturnTypes <- c(paste(rep(X,each=length(Y)),rep(Y,times=length(X)),sep=""),"R")
+  if ( ! ( returnType %in% validReturnTypes ) ) stop(paste("Unrecognized 'returnType'.  Valid values are: ",paste(validReturnTypes,collapse=", "),sep=""))
   if ( ( ( interpolate == "" ) && ( get("interpolate",envir=interpreter[['env']]) ) ) || ( interpolate == TRUE ) ) {
-    args <- strintrplt(args,parent.frame())
-    body <- strintrplt(body,parent.frame())
+    argsType <- sapply(argsType,function(x) strintrplt(x,parent.frame()))
+    returnType <- strintrplt(returnType,parent.frame())
   }
-  if ( get("debug",envir=interpreter[['env']]) ) msg("Sending DEF request.")
-  wb(interpreter,DEF)
-  rscalaReference <- reference
-  prependedArgs <- if ( ! is.null(reference) ) paste0("rscalaReference: ",reference[['type']],ifelse(args=="","",","),args)
-  else args
-  wc(interpreter,prependedArgs)
-  wc(interpreter,body)
-  flush(interpreter[['socketIn']])
-  status <- rb(interpreter,"integer")
-  if ( status == OK ) {
+  functionNumber <- get("callbackNameCounter",envir=interpreter[['env']])
+  functionName <- paste(".f",functionNumber,sep="")
+  assign("callbackNameCounter",functionNumber+1L,envir=interpreter[['env']])
+  assign(functionName,func,envir=interpreter[['workspace']])
+  xs <- paste("x",1:length(argsType),sep="")
+  argsScala <- paste(paste(xs,argsType,sep=": "),collapse=", ")
+  sets <- paste(paste('R.set(".',xs,'",',xs,')',sep=""),collapse="\n")
+  argsR <- paste(".",xs,sep="",collapse=",")
+  snippet <- sprintf('(%s) => {
+    locally {
+      %s
+      R.eval%s("%s(%s)")
+    }
+  }',argsScala,sets,returnType,functionName,argsR)
+  snippet <- strintrplt(snippet,parent.frame())
+  result <- evalAndGet(interpreter,snippet,TRUE)
+  if ( is.null(result) ) invisible(result)
+  else result
+}
+
+scalaDef <- function(interpreter,args,body,interpolate="",reference=NULL) {
+  cc(interpreter)
+  tryCatch({
+    tmpFunc <- NULL
+    args <- gsub("^\\s+$","",args)
+    body <- paste(body,collapse="\n")
+    if ( ( ( interpolate == "" ) && ( get("interpolate",envir=interpreter[['env']]) ) ) || ( interpolate == TRUE ) ) {
+      args <- strintrplt(args,parent.frame())
+      body <- strintrplt(body,parent.frame())
+    }
+    if ( get("debug",envir=interpreter[['env']]) ) msg("Sending DEF request.")
+    wb(interpreter,DEF)
+    rscalaReference <- reference
+    prependedArgs <- if ( ! is.null(reference) ) paste0("rscalaReference: ",reference[['type']],ifelse(args=="","",","),args)
+    else args
+    wc(interpreter,prependedArgs)
+    wc(interpreter,body)
+    flush(interpreter[['socketIn']])
     status <- rb(interpreter,"integer")
     if ( status == OK ) {
       status <- rb(interpreter,"integer")
       if ( status == OK ) {
         status <- rb(interpreter,"integer")
         if ( status == OK ) {
-          functionName <- rc(interpreter)
-          length <- rb(interpreter,"integer")
-          functionParamNames <- if ( length > 0 ) sapply(1:length,function(x) rc(interpreter))
-          else character(0)
-          functionParamTypes <- if ( length > 0 ) sapply(1:length,function(x) rc(interpreter))
-          else character(0)
-          functionReturnType <- rc(interpreter)
-          convertedCode <- list()
-          if ( length > 0 ) for ( i in 1:length ) {
-            convertedCode[[i]] <- convert(functionParamNames[i],functionParamTypes[i])
+          status <- rb(interpreter,"integer")
+          if ( status == OK ) {
+            functionName <- rc(interpreter)
+            length <- rb(interpreter,"integer")
+            functionParamNames <- if ( length > 0 ) sapply(1:length,function(x) rc(interpreter))
+            else character(0)
+            functionParamTypes <- if ( length > 0 ) sapply(1:length,function(x) rc(interpreter))
+            else character(0)
+            functionReturnType <- rc(interpreter)
+            convertedCode <- list()
+            if ( length > 0 ) for ( i in 1:length ) {
+              convertedCode[[i]] <- convert(functionParamNames[i],functionParamTypes[i])
+            }
+            convertedCodeStr <- paste("    ",unlist(convertedCode),sep="",collapse="\n")
+            serializeCodeStr <- ifelse(get("serialize",envir=interpreter[["env"]]),"rscala:::echoResponseScala(interpreter)","")
+            argsStr <- if ( ! is.null(reference) ) paste(functionParamNames[-1],collapse=",")
+            else paste(functionParamNames,collapse=",")
+            if ( nchar(argsStr) > 0 ) argsStr <- paste(argsStr,", ",sep="")
+            functionSnippet <- strintrplt('
+    tmpFunc <- function(@{argsStr}as.reference=NA, gc=FALSE) {
+  @{convertedCodeStr}
+      if ( gc ) scalaGC(interpreter)
+      rscala:::wb(interpreter,rscala:::INVOKE)
+      rscala:::wc(interpreter,"@{functionName}")
+      flush(interpreter[["socketIn"]])
+      rscala:::rServe(interpreter,TRUE)
+      status <- rscala:::rb(interpreter,"integer")
+      @{serializeCodeStr}
+      if ( status == rscala:::ERROR ) {
+        stop("Invocation error.")
+      } else {
+        result <- scalaGet(interpreter,"?",as.reference=as.reference)
+        if ( is.null(result) ) invisible(result)
+        else result
+      }
+    }')
+            eval(parse(text=functionSnippet))
+          } else {
+            if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
+            stop("Evaluation error.")
           }
-          convertedCodeStr <- paste("    ",unlist(convertedCode),sep="",collapse="\n")
-          argsStr <- if ( ! is.null(reference) ) paste(functionParamNames[-1],collapse=",")
-          else paste(functionParamNames,collapse=",")
-          if ( nchar(argsStr) > 0 ) argsStr <- paste(argsStr,", ",sep="")
-          functionSnippet <- strintrplt('
-  tmpFunc <- function(@{argsStr}as.reference=NA, gc=FALSE) {
-@{convertedCodeStr}
-    if ( gc ) intpGC(interpreter)
-    rscala:::wb(interpreter,rscala:::INVOKE)
-    rscala:::wc(interpreter,"@{functionName}")
-    flush(interpreter[["socketIn"]])
-    rscala:::rServe(interpreter,TRUE)
-    status <- rscala:::rb(interpreter,"integer")
-    if ( get("serialize",envir=interpreter[["env"]]) ) rscala:::echoResponseScala(interpreter)
-    if ( status == rscala:::ERROR ) {
-      stop("Invocation error.")
-    } else {
-      result <- intpGet(interpreter,"?",as.reference=as.reference)
-      if ( is.null(result) ) invisible(result)
-      else result
-    }
-  }')
-          eval(parse(text=functionSnippet))
         } else {
           if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
           stop("Evaluation error.")
         }
       } else {
         if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
-        stop("Evaluation error.")
+        stop("Unsupported data type.")
       }
     } else {
       if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
-      stop("Unsupported data type.")
+      stop("Error in parsing function arguments.")
     }
-  } else {
     if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
-    stop("Error in parsing function arguments.")
-  }
-  if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
-  if ( is.null(tmpFunc) ) return(invisible())
-  attr(tmpFunc,"args") <- args
-  attr(tmpFunc,"body") <- body
-  attr(tmpFunc,"type") <- functionReturnType
-  tmpFunc
+    if ( is.null(tmpFunc) ) return(invisible())
+    attr(tmpFunc,"args") <- args
+    attr(tmpFunc,"body") <- body
+    attr(tmpFunc,"type") <- functionReturnType
+    tmpFunc
+  }, interrupt = function(x) {
+    assign("open",FALSE,envir=interpreter[['env']])
+    close(interpreter[['socketOut']])
+    close(interpreter[['socketIn']])
+    message("Interpreter closed by interrupt.")
+  })
 }
 
 scalap <- function(interpreter,item.name) {
   if ( ! inherits(interpreter,"ScalaInterpreter") ) stop("The first argument must be an interpreter.")
   cc(interpreter)
-  wb(interpreter,SCALAP)
-  wc(interpreter,item.name)
-  flush(interpreter[['socketIn']])
-  status <- rb(interpreter,"integer")
-  if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
+  tryCatch({
+    wb(interpreter,SCALAP)
+    wc(interpreter,item.name)
+    flush(interpreter[['socketIn']])
+    status <- rb(interpreter,"integer")
+    if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
+  }, interrupt = function(x) {
+    assign("open",FALSE,envir=interpreter[['env']])
+    close(interpreter[['socketOut']])
+    close(interpreter[['socketIn']])
+    message("Interpreter closed by interrupt.")
+  })
 }
 
-intpWrap.ScalaInterpreter <- function(interpreter,value) {
+scalaWrap <- function(interpreter,value) {
   cc(interpreter)
   interpreter[['workspace']]$.rscala.wrap <- value
   interpreter$.R$getR(".rscala.wrap",as.reference=TRUE)
 }
 
-intpUnwrap.ScalaInterpreter <- function(interpreter,value) {
+scalaUnwrap <- function(interpreter,value) {
   cc(interpreter)
   if ( is.null(value) ) NULL
   else get(value$name(),envir=interpreter[['workspace']]$.)
 }
 
-intpGC.ScalaInterpreter <- function(interpreter) {
+scalaGC <- function(interpreter) {
   cc(interpreter)
   gc()
   markedForGC <- get("markedForGC",interpreter[["env"]])
   if ( length(markedForGC) > 0 ) {
     if ( get("debug",envir=interpreter[['env']]) ) msg("Sending GC request.")
-    wb(interpreter,GC)
-    wb(interpreter,length(markedForGC))
-    wb(interpreter,markedForGC)
-    flush(interpreter[['socketIn']])
-    assign("markedForGC",integer(0),interpreter[["env"]])
+    tryCatch({
+      wb(interpreter,GC)
+      wb(interpreter,length(markedForGC))
+      wb(interpreter,markedForGC)
+      flush(interpreter[['socketIn']])
+      assign("markedForGC",integer(0),interpreter[["env"]])
+    }, interrupt = function(x) {
+      assign("open",FALSE,envir=interpreter[['env']])
+      close(interpreter[['socketOut']])
+      close(interpreter[['socketIn']])
+      message("Interpreter closed by interrupt.")
+    })
   }
   if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
   invisible()
 }
 
-intpReset.ScalaInterpreter <- function(interpreter) {
+scalaReset <- function(interpreter) {
   cc(interpreter)
   if ( get("debug",envir=interpreter[['env']]) ) msg("Sending RESET request.")
-  wb(interpreter,RESET)
-  flush(interpreter[['socketIn']])
-  if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
+  tryCatch({
+    wb(interpreter,RESET)
+    flush(interpreter[['socketIn']])
+    if ( get("serialize",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
+  }, interrupt = function(x) {
+    assign("open",FALSE,envir=interpreter[['env']])
+    close(interpreter[['socketOut']])
+    close(interpreter[['socketIn']])
+    message("Interpreter closed by interrupt.")
+  })
   invisible()
 }
 
@@ -617,30 +658,17 @@ close.ScalaInterpreter <- function(con,...) {
   close(con[['socketIn']])
 }
 
-rscalaPackage <- function(pkgname) {
-  environmentOfDependingPackage <- parent.env(parent.frame())
-  E <- new.env(parent=environmentOfDependingPackage)
-  E$initialized <- FALSE
-  E$pkgname <- pkgname
-  E$jars <- list.files(system.file("java",package=pkgname),pattern=".*.jar$",full.names=TRUE,recursive=TRUE)
-  assign("E",E,envir=environmentOfDependingPackage)
+.rscalaPackage <- function(pkgname, classpath.appendix=character(0), ...) {
+  classpath <- c(list.files(system.file("java",package=pkgname),pattern=".*.jar$",full.names=TRUE,recursive=TRUE),classpath.appendix)
+  s <- scala(classpath=classpath,...)
+  assign("s",s,envir=parent.env(parent.frame()))    # Assign to environment of depending package
   invisible()
 }
 
-rscalaLoad <- function(classpath=NULL,...) {
-  E <- get("E",envir=parent.env(parent.frame()))
-  if ( E$initialized ) return(invisible(FALSE))
-  if ( is.null(classpath) ) classpath <- E$jars
-  else E$jars <- classpath
-  E$s <- scalaInterpreter(classpath=classpath,...)
-  E$initialized <- TRUE
-  invisible(TRUE)
-}
-
-rscalaJar <- function(version="") {
+.rscalaJar <- function(version="") {
   if ( version == "" ) major.version <- ".*"
   else major.version <- substr(version,1,4)
-  list.files(system.file("java",package="rscala"),pattern=paste("rscala_",major.version,'-.*[0-9]\\.jar$',sep=""),full.names=TRUE)
+  list.files(system.file("java",package="rscala"),pattern=paste("rscala_",major.version,'-.*\\.jar$',sep=""),full.names=TRUE)
 }
 
 scalaInfoEngine <- function(scala.command,verbose) {
@@ -699,11 +727,11 @@ scalaInfoEngine <- function(scala.command,verbose) {
     if ( verbose ) cat(sprintf("Cannot get Scala version from library jar (%s)\n",libraryJar))
     return(NULL)
   }
-  if ( ! ( major.version %in% c("2.11") ) ) {
+  if ( ! ( major.version %in% c("2.10","2.11","2.12") ) ) {
     if ( verbose ) cat(sprintf("Unsupported major version (%s) from Scala executable (%s)\n",major.version,scala.command))
     return(NULL)
   }
-  list(cmd=scala.command,home=scala.home,version=version,major.version=major.version,jars=jars)
+  list(cmd=scala.command,home=scala.home,version=version,major.version=major.version)
 }
 
 scalaInfo <- function(scala.home=NULL,verbose=FALSE) {
@@ -758,10 +786,8 @@ scalaInfo <- function(scala.home=NULL,verbose=FALSE) {
 # Private
 
 evalAndGet <- function(interpreter,snippet,as.reference) {
-  tryCatch({
-    intpEval(interpreter,snippet,interpolate=FALSE)
-    intpGet(interpreter,".",as.reference=as.reference)
-  },error=function(e) return(invisible()))
+  scalaEval(interpreter,snippet,interpolate=FALSE)
+  scalaGet(interpreter,".",as.reference=as.reference)
 }
 
 checkType <- function(x) {
@@ -842,13 +868,13 @@ convert <- function(x,t) {
   if ( length(v) != 0 ) {
     v <- c(sprintf("if ( ! inherits(%s,'ScalaInterpreterReference') ) {",x),paste("  ",v,sep=""),"}")
   }
-  c(v,sprintf("intpSet(interpreter,'.',%s,length.one.as.vector=%s)",x,loav))
+  c(v,sprintf("scalaSet(interpreter,'.',%s,length.one.as.vector=%s)",x,loav))
 }
 
 echoResponseScala <- function(interpreter) {
   if ( get("debug",envir=interpreter[['env']]) ) msg('Reading serialized response.')
   response <- rc(interpreter)
-  if ( response == "" ) return
+  if ( response == "" ) return()
   if ( get("debug",envir=interpreter[['env']]) ) msg('Serialized output: <')
   cat(response)
   if ( get("debug",envir=interpreter[['env']]) ) msg('>')
@@ -885,7 +911,7 @@ rc <- function(c) {
 
 scalaInstall <- function() {
   installPath <- normalizePath(file.path("~",".rscala"),mustWork=FALSE)
-  url <- sprintf("http://downloads.typesafe.com/scala/%s/scala-%s.tgz",CURRENT_SUPPORTED_SCALA_VERSION,CURRENT_SUPPORTED_SCALA_VERSION)
+  url <- sprintf("http://downloads.lightbend.com/scala/%s/scala-%s.tgz",CURRENT_SUPPORTED_SCALA_VERSION,CURRENT_SUPPORTED_SCALA_VERSION)
   dir.create(installPath,showWarnings=FALSE,recursive=TRUE)
   destfile <- file.path(installPath,basename(url))
   result <- download.file(url,destfile)
