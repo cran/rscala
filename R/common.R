@@ -1,6 +1,6 @@
-'%~%'  <- function(interpreter,snippet) UseMethod("%~%")
-'%.~%' <- function(interpreter,snippet) UseMethod("%.~%")
-'%@%'  <- function(interpreter,snippet) UseMethod("%@%")
+'%~%'   <- function(interpreter,snippet) UseMethod("%~%")
+'%.~%'  <- function(interpreter,snippet) UseMethod("%.~%")
+'%@%'   <- function(interpreter,snippet) UseMethod("%@%")
 
 strintrplt <- function(snippet,envir=parent.frame()) {
   if ( ! is.character(snippet) ) stop("Character vector expected.")
@@ -14,15 +14,20 @@ strintrplt <- function(snippet,envir=parent.frame()) {
   } else snippet
 }
 
-scalaSettings <- function(interpreter,interpolate=NULL,length.one.as.vector=NULL) {
-  if ( is.null(interpolate) && is.null(length.one.as.vector) ) {
+scalaSettings <- function(interpreter, interpolate=NULL, info=NULL) {
+  if ( is.null(interpolate) && is.null(info) ) {
     list(debug=get("debug",envir=interpreter[['env']]),
-         serialize=get("serialize",envir=interpreter[['env']]),
+         info=get("info",envir=interpreter[['env']]),
          interpolate=get("interpolate",envir=interpreter[['env']]),
-         length.one.as.vector=get("length.one.as.vector",envir=interpreter[['env']]))
+         row.major=get("rowMajor",envir=interpreter[['env']]),
+         serialize.output=get("serializeOutput",envir=interpreter[['env']]))
   } else {
-    if ( !is.null(interpolate) ) assign("interpolate",as.logical(interpolate)[1],envir=interpreter[['env']])
-    if ( !is.null(length.one.as.vector) ) assign("length.one.as.vector",as.logical(length.one.as.vector)[1],envir=interpreter[['env']])
+    if ( ! is.null(interpolate) ) assign("interpolate",as.logical(interpolate)[1],envir=interpreter[['env']])
+    if ( ! is.null(info) ) {
+      if ( exists("info",envir=interpreter[['env']]) ) stop("'info' cannot be set by the user.")
+      assign("info",info,envir=interpreter[['env']])
+    }
+    invisible(NULL)
   }
 }
 

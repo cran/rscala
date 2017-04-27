@@ -1,7 +1,6 @@
-rServe <- function(sockets,with.callbacks) {
-  cc(sockets)
-  workspace <- sockets[['workspace']]
+rServe <- function(sockets,with.callbacks,workspace=.GlobalEnv) {
   debug <- get("debug",envir=sockets[['env']])
+  if ( debug ) msg(paste0("R server using environment: ",capture.output(print(workspace))))
   while ( TRUE ) {
     if ( debug ) msg("R server at top of the loop waiting for a command.")
     cmd <- rb(sockets,"integer")
@@ -39,26 +38,28 @@ rServe <- function(sockets,with.callbacks) {
       dataStructure <- rb(sockets,"integer")
       if ( dataStructure == NULLTYPE ) {
         if ( cmd == SET ) assign(identifier,NULL,envir=workspace)
-        else subassign(sockets,identifier,index,NULL,cmd==SET_SINGLE)
-      } else if ( dataStructure == ATOMIC ) {
+        else subassign(sockets,identifier,index,NULL,cmd==SET_SINGLE,workspace)
+      } else if ( dataStructure == SCALAR ) {
         dataType <- rb(sockets,"integer")
         if ( dataType == INTEGER ) value <- rb(sockets,"integer")
         else if ( dataType == DOUBLE ) value <- rb(sockets,"double")
         else if ( dataType == BOOLEAN ) value <- rb(sockets,"integer") != 0
         else if ( dataType == STRING ) value <- rc(sockets)
+        else if ( dataType == BYTE ) value <- rb(sockets,"raw")
         else stop(paste("Unknown data type:",dataType))
         if ( cmd == SET ) assign(identifier,value,envir=workspace)
-        else subassign(sockets,identifier,index,value,cmd==SET_SINGLE)
+        else subassign(sockets,identifier,index,value,cmd==SET_SINGLE,workspace)
       } else if ( dataStructure == VECTOR ) {
         dataLength <- rb(sockets,"integer")
         dataType <- rb(sockets,"integer")
         if ( dataType == INTEGER ) value <- rb(sockets,"integer",n=dataLength)
         else if ( dataType == DOUBLE ) value <- rb(sockets,"double",n=dataLength)
         else if ( dataType == BOOLEAN ) value <- rb(sockets,"integer",n=dataLength) != 0
-        else if ( dataType == STRING ) value <- sapply(1:dataLength,function(i) rc(sockets))
+        else if ( dataType == STRING ) value <- sapply(seq_len(dataLength),function(i) rc(sockets))
+        else if ( dataType == BYTE ) value <- rb(sockets,"raw",n=dataLength)
         else stop(paste("Unknown data type:",dataType))
         if ( cmd == SET ) assign(identifier,value,envir=workspace)
-        else subassign(sockets,identifier,index,value,cmd==SET_SINGLE)
+        else subassign(sockets,identifier,index,value,cmd==SET_SINGLE,workspace)
       } else if ( dataStructure == MATRIX ) {
         dataNRow <- rb(sockets,"integer")
         dataNCol <- rb(sockets,"integer")
@@ -67,21 +68,14 @@ rServe <- function(sockets,with.callbacks) {
         if ( dataType == INTEGER ) value <- matrix(rb(sockets,"integer",n=dataLength),nrow=dataNRow,byrow=TRUE)
         else if ( dataType == DOUBLE ) value <- matrix(rb(sockets,"double",n=dataLength),nrow=dataNRow,byrow=TRUE)
         else if ( dataType == BOOLEAN ) value <- matrix(rb(sockets,"integer",n=dataLength),nrow=dataNRow,byrow=TRUE) != 0
-        else if ( dataType == STRING ) value <- matrix(sapply(1:dataLength,function(i) rc(sockets)),nrow=dataNRow,byrow=TRUE)
+        else if ( dataType == STRING ) value <- matrix(sapply(seq_len(dataLength),function(i) rc(sockets)),nrow=dataNRow,byrow=TRUE)
+        else if ( dataType == BYTE ) value <- matrix(rb(sockets,"raw",n=dataLength),nrow=dataNRow,byrow=TRUE)
         else stop(paste("Unknown data type:",dataType))
         if ( cmd == SET ) assign(identifier,value,envir=workspace)
-        else subassign(sockets,identifier,index,value,cmd==SET_SINGLE)
-      } else if ( dataStructure == REFERENCE ) {
-        otherIdentifier <- rc(sockets)
-        if ( exists(otherIdentifier,envir=workspace$.) ) {
-          wb(sockets,OK)
-          value <- get(otherIdentifier,envir=workspace$.)
-          if ( cmd == SET ) assign(identifier,value,envir=workspace)
-          else subassign(sockets,identifier,index,value,cmd==SET_SINGLE)
-        } else {
-          wb(sockets,UNDEFINED_IDENTIFIER)
-        }
-      } else stop(paste("Unknown data structure:",dataStructure))
+        else subassign(sockets,identifier,index,value,cmd==SET_SINGLE,workspace)
+      } else if ( dataStructure == UNSUPPORTED_STRUCTURE ) {
+        # Don't do anything more.
+      } else stop("Protocol error.")
     } else if ( cmd == GET ) {
       if ( debug ) msg("Got GET")
       identifier <- rc(sockets)
@@ -92,35 +86,43 @@ rServe <- function(sockets,with.callbacks) {
         wb(sockets,UNDEFINED_IDENTIFIER)
       } else if ( ! is.atomic(value) ) {
         wb(sockets,UNSUPPORTED_STRUCTURE)
-      } else if ( is.vector(value) ) {
-        type <- checkType(value)
-        if ( ( length(value) == 1 ) && ( ! get("length.one.as.vector",envir=sockets[['env']]) ) ) {
-          wb(sockets,ATOMIC)
-        } else {
-          wb(sockets,VECTOR)
-          wb(sockets,length(value))
-        }
-        wb(sockets,type)
-        if ( type == STRING ) {
-          if ( length(value) > 0 ) for ( i in 1:length(value) ) wc(sockets,value[i])
-        } else {
-          if ( type == BOOLEAN ) wb(sockets,as.integer(value))
-          else wb(sockets,value)
-        }
-      } else if ( is.matrix(value) ) {
-        type <- checkType(value)
-        wb(sockets,MATRIX)
-        wb(sockets,dim(value))
-        wb(sockets,type)
-        if ( nrow(value) > 0 ) for ( i in 1:nrow(value) ) {
-          if ( type == STRING ) {
-            if ( ncol(value) > 0 ) for ( j in 1:ncol(value) ) wc(sockets,value[i,j])
-          }
-          else if ( type == BOOLEAN ) wb(sockets,as.integer(value[i,]))
-          else wb(sockets,value[i,])
-        }
       } else {
-        wb(sockets,UNSUPPORTED_STRUCTURE)
+        asScalar <- if ( inherits(value,"AsIs") ) {
+          if ( length(value) == 1 ) value <- as.vector(value)
+          TRUE
+        } else {
+          FALSE
+        }
+        if ( is.vector(value) ) {
+          type <- checkType(value)
+          if ( asScalar ) {
+            wb(sockets,SCALAR)
+          } else {
+            wb(sockets,VECTOR)
+            wb(sockets,length(value))
+          }
+          wb(sockets,type)
+          if ( type == STRING ) {
+            if ( length(value) > 0 ) for ( i in seq_len(length(value)) ) wc(sockets,value[i])
+          } else {
+            if ( type == BOOLEAN ) wb(sockets,as.integer(value))
+            else wb(sockets,value)
+          }
+        } else if ( is.matrix(value) ) {
+          type <- checkType(value)
+          wb(sockets,MATRIX)
+          wb(sockets,dim(value))
+          wb(sockets,type)
+          if ( nrow(value) > 0 ) for ( i in seq_len(nrow(value)) ) {
+            if ( type == STRING ) {
+              if ( ncol(value) > 0 ) for ( j in seq_len(ncol(value)) ) wc(sockets,value[i,j])
+            }
+            else if ( type == BOOLEAN ) wb(sockets,as.integer(value[i,]))
+            else wb(sockets,value[i,])
+          }
+        } else {
+          wb(sockets,UNSUPPORTED_STRUCTURE)
+        }
       }
     } else if ( cmd == GET_REFERENCE ) {
       if ( debug ) msg("Got GET_REFERENCE")
@@ -130,11 +132,13 @@ rServe <- function(sockets,with.callbacks) {
         wb(sockets,UNDEFINED_IDENTIFIER)
       } else {
         wb(sockets,REFERENCE)
-        wc(sockets,new.reference(value,workspace$.))
+        wc(sockets,paste0(".rsI[['r']]$",uniqueName(value,sockets[['r']],"")))
       }
-    } else if ( cmd == GC ) {
-      if ( debug ) msg("Got GC")
-      workspace$. <- new.env(parent=workspace)
+    } else if ( cmd == FREE ) {
+      if ( debug ) msg("Got FREE")
+      dataLength <- rb(sockets,"integer")
+      what <- sapply(seq_len(dataLength),function(i) rc(sockets))
+      rm(list=what,envir=sockets[['r']])
     } else if ( cmd == SHUTDOWN ) {
       if ( debug ) msg("Got SHUTDOWN")
       return()
@@ -146,8 +150,7 @@ rServe <- function(sockets,with.callbacks) {
   }
 }
 
-subassign <- function(sockets,x,i,value,single=TRUE) {
-  workspace <- sockets[['workspace']]
+subassign <- function(sockets,x,i,value,single,workspace) {
   assign(".rscala.set.value",value,envir=workspace)
   brackets <- if ( single ) c("[","]") else c("[[","]]")
   output <- NULL
@@ -167,14 +170,5 @@ subassign <- function(sockets,x,i,value,single=TRUE) {
   }
   rm(".rscala.set.value",envir=workspace)
   invisible(value)
-}
-
-new.reference <- function(value,envir) {
-  name <- ""
-  while ( ( name == "" ) || ( exists(name,envir=envir) ) ) {  
-    name <- paste0(sample(lEtTeRs,1),paste0(sample(alphabet,7,replace=TRUE),collapse=""))
-  }
-  assign(name,value,envir=envir)
-  name
 }
 
