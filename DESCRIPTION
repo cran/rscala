@@ -1,8 +1,8 @@
 Package: rscala
 Type: Package
 Title: Bi-Directional Interface Between R and Scala with Callbacks
-Version: 2.0.1
-Date: 2017-04-27
+Version: 2.1.0
+Date: 2017-05-08
 Authors@R: person(given="David B.",family="Dahl",role=c("aut","cre"),email="dahl@stat.byu.edu")
 URL: https://github.com/dbdahl/rscala
 BugReports: https://github.com/dbdahl/rscala/issues
@@ -11,8 +11,8 @@ SystemRequirements: Scala (>= 2.10)
 Description: The Scala <http://www.scala-lang.org/> interpreter is embedded in R and callbacks to R from the embedded interpreter are supported.  Conversely, the R interpreter is embedded in Scala.  Scala versions in the 2.10.x, 2.11.x, and 2.12.x series are supported.
 License: GPL (>= 2) | BSD_3_clause + file LICENSE
 NeedsCompilation: no
-Packaged: 2017-04-27 12:26:13 UTC; dahl
+Packaged: 2017-05-08 22:36:09 UTC; dahl
 Author: David B. Dahl [aut, cre]
 Maintainer: David B. Dahl <dahl@stat.byu.edu>
 Repository: CRAN
-Date/Publication: 2017-04-27 15:44:34 UTC
+Date/Publication: 2017-05-09 07:07:01 UTC
