@@ -7,9 +7,7 @@
 \alias{.rscalaDelay}
 \docType{methods}
 \title{
-Creates an instance of an embedded Scala interpreter/compiler.
-Provides file path for Scala and this package's JAR file.
-Provides functions to enable other packages to depend on this package.
+Create an Instance of an Embedded Scala Interpreter
 }
 \description{
 The function \code{\link{scala}} creates an instance of an embedded Scala
@@ -26,7 +24,7 @@ paths to JAR files, installation directories, the Scala executable, and this
 package.  Note that if you only want to embed R in a Scala application, you do
 not need to install the package. Simply add the following line to the your SBT
 build.sbt file: \sQuote{libraryDependencies += "org.ddahl" %% "rscala" %
-"_VERSION_"}, where _VERSION_ is the rscala version number (i.e., 2.1.0).
+"_VERSION_"}, where _VERSION_ is the rscala version number (i.e., 2.1.1).
 
 \code{\link{scalaInstall}} downloads and installs Scala in \dQuote{~/.rscala}
 in the user's home directory.  System administrators can install Scala
@@ -47,12 +45,18 @@ the namespace.  The object \code{s} is only initialized on its first usage.
 scala(classpath=character(),
       serialize.output=FALSE, scala.home=NULL,
       heap.maximum=NULL, command.line.options=NULL, row.major=TRUE,
-      timeout=60, debug=FALSE, stdout=TRUE, stderr=TRUE, port=0)
+      timeout=60, debug=FALSE, stdout=TRUE, stderr=TRUE, port=0,
+      scalaInfo=NULL)
 
 scalaInfo(scala.home=NULL, verbose=FALSE)
+
 scalaInstall(major.version=c("2.12","2.11","2.10")[1])
+
 .rscalaJar(major.version=c("2.12","2.11","2.10")[1])
-.rscalaPackage(pkgname, classpath.appendix=character(), snippet=character(), ...)
+
+.rscalaPackage(pkgname, snippet=character(), classpath.packages=character(),
+               classpath.prepend=character(), classpath.append=character(), ...)
+
 .rscalaDelay(expression)
 }
 \arguments{
@@ -66,11 +70,14 @@ scalaInstall(major.version=c("2.12","2.11","2.10")[1])
     \item{debug}{An option meant only for developers of the package itself and not intended for users of the package.}
     \item{stdout, stderr}{Where standard output and standard error results that are not serialized should be sent.  \code{TRUE} (the default) or \code{""} sends output to the R console (although that may not work on Windows).  \code{FALSE} or \code{NULL} discards the output.  Otherwise, this is the name of the file that receives the output.}
     \item{port}{If \code{0}, two random ports are selected.  Otherwise, \code{port} and \code{port+1} are used to the TCP/IP connections.}
+    \item{scalaInfo}{The result of a previous call to \code{\link{scalaInfo}}.}
     \item{verbose}{A logical vector of length one indicating whether information regarding the search for the Scala installation should be displayed.}
     \item{major.version}{A string specifying the major Scala version (e.g., "2.12").  If \code{""}, the JAR files for all Scala versions are returned by \code{\link{.rscalaJar}}.}
     \item{pkgname}{A character string giving the name of the package (as provided the second argument of the \code{.onLoad} function) that wishes to depend on this package.}
-    \item{classpath.appendix}{A character vector giving additional JAR files or directories for the Scala compiler/interpreter embedded within a package via the \code{\link{.rscalaPackage}} function.  The JAR files in the \sQuote{java} directory of the package are already included and do not need to be added here.}
     \item{snippet}{A character vector providing Scala code that will evaluated when the interpreter in the package namespace is first used.}
+    \item{classpath.packages}{A character vector giving names of other installed packages whose JAR files should be appended to the classpath for the Scala compiler/interpreter embedded within a package via the \code{\link{.rscalaPackage}} function.  The JAR files in the package's \sQuote{java} directory are already included and do not need to be added here.}
+    \item{classpath.prepend}{A character vector giving the full path to JAR files to add to the \emph{beginning} of the classpath for the Scala compiler/interpreter embedded within a package via the \code{\link{.rscalaPackage}} function.  The JAR files in the package's \sQuote{java} directory are already included and do not need to be added here.}
+    \item{classpath.append}{A character vector giving the full path to JAR files to add to the \emph{end} of the classpath for the Scala compiler/interpreter embedded within a package via the \code{\link{.rscalaPackage}} function.  The JAR files in the package's \sQuote{java} directory are already included and do not need to be added here.}
     \item{...}{These arguments are passed by the \code{\link{.rscalaPackage}} function to the \code{\link{scala}} function.}
     \item{expression}{(\code{\link{.rscalaDelay}} is deprecated.)  An expression that will be evaluated when the \code{\link{.rscalaPackage}} function runs.}.
 }
@@ -85,8 +92,8 @@ David B. Dahl \email{dahl@stat.byu.edu}
 \seealso{
   \code{\link{scalaSettings}},
   \code{\link{scalap}},
-  \code{\link{strintrplt}}
-  \code{\link{rscala-package}},
+  \code{\link{strintrplt}},
+  \code{\link{rscala-package}}
 }
 \keyword{interface}
 
