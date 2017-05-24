@@ -24,7 +24,7 @@ paths to JAR files, installation directories, the Scala executable, and this
 package.  Note that if you only want to embed R in a Scala application, you do
 not need to install the package. Simply add the following line to the your SBT
 build.sbt file: \sQuote{libraryDependencies += "org.ddahl" %% "rscala" %
-"_VERSION_"}, where _VERSION_ is the rscala version number (i.e., 2.1.1).
+"_VERSION_"}, where _VERSION_ is the rscala version number (i.e., 2.2.0).
 
 \code{\link{scalaInstall}} downloads and installs Scala in \dQuote{~/.rscala}
 in the user's home directory.  System administrators can install Scala
@@ -42,7 +42,7 @@ making it available to the package's function) but it is not exported from
 the namespace.  The object \code{s} is only initialized on its first usage.
 }
 \usage{
-scala(classpath=character(),
+scala(classpath=character(), classpath.packages=character(),
       serialize.output=FALSE, scala.home=NULL,
       heap.maximum=NULL, command.line.options=NULL, row.major=TRUE,
       timeout=60, debug=FALSE, stdout=TRUE, stderr=TRUE, port=0,
@@ -61,8 +61,9 @@ scalaInstall(major.version=c("2.12","2.11","2.10")[1])
 }
 \arguments{
     \item{classpath}{A character vector whose elements are paths to JAR files or directories which specify the classpath for the Scala compiler/interpreter.}
+    \item{classpath.packages}{A character vector giving names of other installed packages whose JAR files should be appended to the classpath.}
     \item{serialize.output}{Should standard output (stdout) and standard error (stderr) be captured and serialized back to R?  \code{FALSE} (the default) is recommended except on Windows where \code{TRUE} may be needed to see output and error messages.}
-    \item{scala.home}{A character vector of length one giving the path where Scala is installed.  When set to \code{NULL} (the default), the function sequentially tries to find the Scala home by:  i. using the environment variable \code{SCALA_HOME}, ii. querying the operating system search path, and iii. looking in subdirectories of \code{~/.rscala}.  If all these fail, the function offers to download and install Scala in the above mentioned path (if the current \R session is interactive) or it downloads and installs Scala in a temporary directory (if the current \R session is noninteractive).}
+    \item{scala.home}{A character vector of length one giving the path where Scala is installed.  When set to \code{NULL} (the default), the function sequentially tries to find the Scala home by:  i. querying the glocal option \var{rscala.scala.home}, ii. using the environment variable \code{SCALA_HOME}, iii. querying the operating system search path, and iv. looking in subdirectories of \code{~/.rscala}.  If all these fail, the function displaces a message to help the user install Scala.}
     \item{heap.maximum}{A character vector of length one used to specify the maximum heap size in the JVM.  If \code{NULL}, the global option \var{rscala.heap.maximum} is queried and, if that is also \code{NULL}, Scala's default value is used.  This option is ignored if \var{command.line.options} is not null.}
     \item{command.line.options}{A character vector whose elements are passed as command line arguments when invoking Scala.  If \code{NULL}, the global option \var{rscala.command.line.options} is queried and, if that is also \code{NULL}, the value is set to \code{NULL}.  A value of \code{NULL} means no extra arguments are provided.  If you simply want to add to the classpath and/or set the maximum heap size, use the \var{classpath} and \var{heap.maximum} arguments.}
     \item{row.major}{Should matrices in Scala be row major?}
@@ -72,10 +73,9 @@ scalaInstall(major.version=c("2.12","2.11","2.10")[1])
     \item{port}{If \code{0}, two random ports are selected.  Otherwise, \code{port} and \code{port+1} are used to the TCP/IP connections.}
     \item{scalaInfo}{The result of a previous call to \code{\link{scalaInfo}}.}
     \item{verbose}{A logical vector of length one indicating whether information regarding the search for the Scala installation should be displayed.}
-    \item{major.version}{A string specifying the major Scala version (e.g., "2.12").  If \code{""}, the JAR files for all Scala versions are returned by \code{\link{.rscalaJar}}.}
+    \item{major.version}{A string specifying the major Scala version (e.g., "2.12").}
     \item{pkgname}{A character string giving the name of the package (as provided the second argument of the \code{.onLoad} function) that wishes to depend on this package.}
     \item{snippet}{A character vector providing Scala code that will evaluated when the interpreter in the package namespace is first used.}
-    \item{classpath.packages}{A character vector giving names of other installed packages whose JAR files should be appended to the classpath for the Scala compiler/interpreter embedded within a package via the \code{\link{.rscalaPackage}} function.  The JAR files in the package's \sQuote{java} directory are already included and do not need to be added here.}
     \item{classpath.prepend}{A character vector giving the full path to JAR files to add to the \emph{beginning} of the classpath for the Scala compiler/interpreter embedded within a package via the \code{\link{.rscalaPackage}} function.  The JAR files in the package's \sQuote{java} directory are already included and do not need to be added here.}
     \item{classpath.append}{A character vector giving the full path to JAR files to add to the \emph{end} of the classpath for the Scala compiler/interpreter embedded within a package via the \code{\link{.rscalaPackage}} function.  The JAR files in the package's \sQuote{java} directory are already included and do not need to be added here.}
     \item{...}{These arguments are passed by the \code{\link{.rscalaPackage}} function to the \code{\link{scala}} function.}
@@ -120,13 +120,13 @@ s$rPi
 s$val("rPi")
 s$.val("rPi")
 
-s$rPi <- I(pi)     # Now rPi is a scalar, not an array of length one.
+s$rPi <- I(pi)     # Now rPi is an array of length one.
 s$rPi              # It doesn't matter to R...
 s$.val("rPi")      # ... but it does to Scala.
 
 # Convenient notation
-a1 <- s \%~\%  "rPi/2"   # As an R value
-a2 <- s \%.~\% "rPi/2"   # As a Scala reference
+a1 <- s \%~\%  "rPi(0)/2"   # As an R value
+a2 <- s \%.~\% "rPi(0)/2"   # As a Scala reference
 
 # References can be set
 s$foo <- a2
@@ -135,22 +135,22 @@ s$foo
 # Instantiate an object
 seed <- 2349234L
 scalap(s,'scala.util.Random')
-s$.scala.util.Random             # More convenient that using scalap.
-rng <- s$.scala.util.Random$new(I(seed))  # Scala equivalent: new scala.util.Random(seed)
+s$.scala.util.Random                   # More convenient that using scalap.
+rng <- s$.scala.util.Random$new(seed)  # Scala equivalent: new scala.util.Random(seed)
 
 # Call method of a reference
-system.time(rng$nextInt(I(100L)))   # Scala equivalent: rng.nextInt(100)
-system.time(rng$nextInt(I(100L)))   # Notice it runs much faster the second time due to caching
+system.time(rng$nextInt(100L))   # Scala equivalent: rng.nextInt(100)
+system.time(rng$nextInt(100L))   # Notice it runs much faster the second time due to caching
 
-rInt <- rng$nextInt(I(100L),.EVALUATE=FALSE)  # Define function to call quickly later without ...
+rInt <- rng$nextInt(100L,.EVALUATE=FALSE)  # Define function to call quickly later without ...
 rInt(100)                                     # ... needing to protect scalars and ensure type.
 
 # Call method of companion object and call methods of a reference
 # Scala equivalent: (scala.math.BigInt("777",8) - 500).intValue
-s$.scala.math.BigInt$apply(I("777"),I(8L))$'-'(I(500L))$intValue()
+s$.scala.math.BigInt$apply("777",8L)$'-'(500L)$intValue()
 
 # Example showing callback functionality
-f <- s$def(func=NULL, data=numeric(), quiet=I(TRUE)) \%~\% '
+f <- s$def(func=NULL, data=numeric(), quiet=TRUE) \%~\% '
   if ( ! quiet ) println("Here I am in Scala.")
   R.invokeD1(func, data.map(2*_), "verbose" -> !quiet ).sum
 '
@@ -164,7 +164,7 @@ identical( f(cube,1:4,FALSE), sum((2*(1:4))^3) )
 identical( f(cube,1:4,TRUE),  sum((2*(1:4))^3) )
 
 # Longer example showing that s$def(...) is more flexible and faster than '\%~\%'
-drawGaussian <- function(mean=I(0.0), sd=I(1.0), rng=scalaNull("scala.util.Random")) s \%!\% '
+drawGaussian <- function(mean=0.0, sd=1.0, rng=scalaNull("scala.util.Random")) s \%!\% '
   mean+sd*rng.nextDouble
 '
 drawGaussian(3,0.1,rng)  # No scalar protection or casting is needed.
@@ -181,7 +181,7 @@ system.time({
   '
   acf(draws,plot=FALSE)
 })
-sampler <- function(nDraws=I(1L), rho=I(0.0), rng=scalaNull("scala.util.Random")) s \%!\% '
+sampler <- function(nDraws=1L, rho=0.0, rng=scalaNull("scala.util.Random")) s \%!\% '
   val result = new Array[Double](nDraws)
   result(0) = rng.nextGaussian
   for ( i <- 1 until nDraws ) {

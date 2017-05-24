@@ -1,6 +1,6 @@
 ## Scala scripting over TCP/IP
 
-scala <- function(classpath=character(),serialize.output=FALSE,scala.home=NULL,heap.maximum=NULL,command.line.options=NULL,row.major=TRUE,timeout=60,debug=FALSE,stdout=TRUE,stderr=TRUE,port=0,scalaInfo=NULL) {
+scala <- function(classpath=character(),classpath.packages=character(),serialize.output=FALSE,scala.home=NULL,heap.maximum=NULL,command.line.options=NULL,row.major=TRUE,timeout=60,debug=FALSE,stdout=TRUE,stderr=TRUE,port=0,scalaInfo=NULL) {
   if ( identical(stdout,TRUE) ) stdout <- ""
   if ( identical(stderr,TRUE) ) stderr <- ""
   debug <- identical(debug,TRUE)
@@ -9,7 +9,10 @@ scala <- function(classpath=character(),serialize.output=FALSE,scala.home=NULL,h
   port <- as.integer(port[1])
   if ( debug && serialize.output ) stop("When debug is TRUE, serialize.output must be FALSE.")
   if ( debug && ( identical(stdout,FALSE) || identical(stdout,NULL) || identical(stderr,FALSE) || identical(stderr,NULL) ) ) stop("When debug is TRUE, stdout and stderr must not be discarded.")
-  userJars <- unlist(strsplit(classpath,.Platform$path.sep))
+  sInfo <- if ( is.null(scalaInfo) ) scalaInfo(scala.home) else scalaInfo
+  if ( is.null(sInfo) ) stop('Please run "rscala::scalaInstall()" or install Scala manually.')
+  pkgJars <- unlist(lapply(classpath.packages, function(p) jarsOfPackage(p, sInfo$major.version)))
+  userJars <- c(unlist(strsplit(classpath,.Platform$path.sep)),pkgJars)
   if ( is.null(command.line.options) ) {
     command.line.options <- getOption("rscala.command.line.options",default=NULL)
     if ( is.null(command.line.options) ) {
@@ -21,10 +24,9 @@ scala <- function(classpath=character(),serialize.output=FALSE,scala.home=NULL,h
       }
     }
   }
-  sInfo <- if ( is.null(scalaInfo) ) scalaInfo(scala.home) else scalaInfo
-  if ( is.null(sInfo) ) stop('Please run "rscala::scalaInstall()" or install Scala manually.')
   rsJar <- .rscalaJar(sInfo$version)
   rsClasspath <- shQuote(paste(c(rsJar,userJars),collapse=.Platform$path.sep))
+  command.line.options <- shQuote(command.line.options)
   portsFilename <- tempfile("rscala-")
   args <- c(command.line.options,paste0("-Drscala.classpath=",rsClasspath),"-classpath",rsClasspath,"org.ddahl.rscala.server.Main",portsFilename,debug,serialize.output,row.major,port)
   if ( debug ) msg("\n",sInfo$cmd)
@@ -278,15 +280,15 @@ scalaNull <- function(type) {
     class(result) <- "ScalaInterpreterReference"
     result
   } else if ( identifier == "do" ) function(snippet) {
-    warning(paste0("Syntax \"s$do('",snippet,"')\" is deprecated and will be removed.  Use \"s$.",snippet,"\" instead."))
+    # warning(paste0("Syntax \"s$do('",snippet,"')\" is deprecated and will be removed.  Use \"s$.",snippet,"\" instead."))
     result <- list(interpreter=interpreter,snippet=snippet)
     class(result) <- "ScalaInterpreterItem"
     result
   } else if ( identifier == "val" ) function(x) {
-    warning(paste0("Syntax \"s$val()\" is deprecated and will be removed."))
+    # warning(paste0("Syntax \"s$val()\" is deprecated and will be removed."))
     scalaGet(interpreter,x,NA)
   } else if ( identifier == ".val" ) function(x) {
-    warning(paste0("Syntax \"s$.val()\" is deprecated and will be removed."))
+    # warning(paste0("Syntax \"s$.val()\" is deprecated and will be removed."))
     scalaGet(interpreter,x,TRUE)
   } else if ( substr(identifier,1,1) == "." ) {
     identifier <- substring(identifier,2)
@@ -317,12 +319,9 @@ scalaSet <- function(interpreter,identifier,value) {
     } else {
       if ( ! is.atomic(value) ) stop("Data structure is not supported.")
       asScalar <- if ( inherits(value,"AsIs") ) {
-        if ( length(value) != 1 ) stop("Values wrapped in I() must be of length one.")
         value <- as.vector(value)
-        TRUE
-      } else {
         FALSE
-      }
+      } else length(value) == 1
       if ( is.vector(value) ) {
         type <- checkType(value)
         if ( get("debug",envir=interpreter[['env']]) ) msg("Sending SET request.")
@@ -420,9 +419,10 @@ scalaFunctionArgs <- function(.INTERPRETER,...) {
     } else {
       if ( ( ! is.atomic(value) ) || is.null(value) ) stop(paste0('Type of "',name,'" is not supported.'))
       type <- checkType3(value)
-      len <- if ( inherits(value,"AsIs") ) 0
-      else if ( is.vector(value) ) 1
-      else if ( is.matrix(value) ) 2
+      len <- if ( inherits(value,"AsIs") ) 1
+      else if ( is.vector(value) ) {
+        if ( length(value) == 1 ) 0 else 1
+      } else if ( is.matrix(value) ) 2
       else stop(paste0('Type of "',name,'" is not supported.'))
       header[i] <- paste0('val ',name,' = R.get',type,len,'("',name,'")')
     }
@@ -575,8 +575,10 @@ jarsOfPackage <- function(pkgname, major.version) {
     sInfo <- scalaInfo()
     if ( is.null(sInfo) ) stop('Please run "rscala::scalaInstall()" or install Scala manually.')
     pkgJars <- unlist(lapply(c(pkgname,classpath.packages), function(p) jarsOfPackage(p, sInfo$major.version)))
+    classpath.prepend <- unlist(strsplit(classpath.prepend,.Platform$path.sep))
+    classpath.append <- unlist(strsplit(classpath.append,.Platform$path.sep))
     classpath <- c(classpath.prepend,pkgJars,classpath.append)
-    s <- scala(classpath=classpath,scalaInfo=sInfo,...)
+    s <- scala(classpath=classpath,classpath.packages=NULL,scalaInfo=sInfo,...)
     if ( length(snippet) > 0 ) s %@% snippet
     s
   }, assign.env=env)
@@ -606,9 +608,9 @@ jarsOfPackage <- function(pkgname, major.version) {
 }
 
 .rscalaJar <- function(major.version=c("2.12","2.11","2.10")[1]) {
-  if ( major.version == "" ) major.version <- ".*"
-  else major.version <- substr(major.version,1,4)
-  list.files(system.file("java",package="rscala"),pattern=paste("rscala_",major.version,'-.*\\.jar$',sep=""),full.names=TRUE)
+  major.version <- substr(major.version,1,4)
+  if ( ! ( major.version %in% c("2.10","2.11","2.12") ) ) stop("Unsupported major version.")
+  jarsOfPackage("rscala",major.version)
 }
 
 scalaInfoEngine <- function(scala.command,verbose) {
@@ -693,6 +695,14 @@ scalaInfo <- function(scala.home=NULL,verbose=FALSE) {
     stop("Cannot find Scala using 'scala.home' argument.  Expand search by *not* specifying 'scala.home' argument.")
   }
   # Attempt 2
+  scala.home.tmp <- getOption("rscala.scala.home",default="")
+  info <- if ( scala.home.tmp != "" ) {
+    scalaInfoEngine(file.path(scala.home.tmp,"bin","scala"),verbose)
+  } else NULL
+  if ( verbose ) techniqueMsg <- sprintf("'rscala.scala.home' (%s) global option",scala.home.tmp)
+  if ( ! is.null(info) ) { if ( verbose ) cat(tab,successMsg,techniqueMsg,"\n\n",sep=""); return(info) }
+  else if ( verbose ) cat(tab,failureMsg,techniqueMsg,"\n",sep="")
+  # Attempt 3
   scala.home.tmp <- Sys.getenv("SCALA_HOME")
   if ( verbose ) techniqueMsg <- sprintf("SCALA_HOME (%s) environment variable",scala.home.tmp)
   info <- if ( scala.home.tmp != "" ) {
@@ -700,12 +710,12 @@ scalaInfo <- function(scala.home=NULL,verbose=FALSE) {
   } else NULL
   if ( ! is.null(info) ) { if ( verbose ) cat(tab,successMsg,techniqueMsg,"\n\n",sep=""); return(info) }
   else if ( verbose ) cat(tab,failureMsg,techniqueMsg,"\n",sep="")
-  # Attempt 3
+  # Attempt 4
   info <- scalaInfoEngine(Sys.which("scala"),verbose)
   if ( verbose ) techniqueMsg <- "'scala' in the shell's search path"
   if ( ! is.null(info) ) { if ( verbose ) cat(tab,successMsg,techniqueMsg,"\n\n",sep=""); return(info) }
   else if ( verbose ) cat(tab,failureMsg,techniqueMsg,"\n",sep="")
-  # Attempt 4
+  # Attempt 5
   candidates <- list.dirs(normalizePath(file.path("~",".rscala"),mustWork=FALSE),recursive=FALSE)
   details <- file.info(candidates)
   details <- details[order(as.POSIXct(details$mtime),decreasing=TRUE), ]
@@ -716,7 +726,7 @@ scalaInfo <- function(scala.home=NULL,verbose=FALSE) {
     if ( ! is.null(info) ) { if ( verbose ) cat(tab,successMsg,techniqueMsg,"\n\n",sep=""); return(info) }
     else if ( verbose ) cat(tab,failureMsg,techniqueMsg,"\n",sep="")
   }
-  # Attempt 5
+  # Attempt 6
   if ( ! verbose ) scalaInfo(scala.home=scala.home,verbose=TRUE)
   else {
     cat("\nCannot find a suitable Scala installation.\n\n")
