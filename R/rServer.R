@@ -30,7 +30,7 @@ rServe <- function(sockets,with.callbacks,workspace=.GlobalEnv) {
         output <- paste(output,collapse="\n")
         wc(sockets,output)
       }
-      assign(".rscala.last.value",result,envir=workspace)
+      assign(".rsX",result,envir=workspace)
     } else if ( cmd %in% c(SET,SET_SINGLE,SET_DOUBLE) ) {
       if ( debug ) msg("Got SET")
       if ( cmd != SET ) index <- rc(sockets)
@@ -130,7 +130,7 @@ rServe <- function(sockets,with.callbacks,workspace=.GlobalEnv) {
         wb(sockets,UNDEFINED_IDENTIFIER)
       } else {
         wb(sockets,REFERENCE)
-        wc(sockets,paste0(".rsI[['r']]$",uniqueName(value,sockets[['r']],"")))
+        wc(sockets,uniqueName(value,sockets[['r']],""))
       }
     } else if ( cmd == FREE ) {
       if ( debug ) msg("Got FREE")
@@ -143,6 +143,9 @@ rServe <- function(sockets,with.callbacks,workspace=.GlobalEnv) {
     } else if ( cmd == EXIT ) {
       if ( debug ) msg("Got EXIT")
       return()
+    } else if ( cmd == PING ) {
+      if ( debug ) msg("Got PING")
+      wb(sockets,OK)
     } else stop(paste("Unknown command:",cmd))
     flush(sockets[['socketIn']])
   }

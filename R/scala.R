@@ -1,6 +1,6 @@
 ## Scala scripting over TCP/IP
 
-scala <- function(classpath=character(),classpath.packages=character(),serialize.output=FALSE,scala.home=NULL,heap.maximum=NULL,command.line.options=NULL,row.major=TRUE,timeout=60,debug=FALSE,stdout=TRUE,stderr=TRUE,port=0,scalaInfo=NULL) {
+scala <- function(classpath=character(),classpath.packages=character(),serialize.output=.Platform$OS.type=="windows",scala.home=NULL,heap.maximum=NULL,command.line.options=NULL,row.major=TRUE,timeout=60,debug=FALSE,stdout=TRUE,stderr=TRUE,port=0,scalaInfo=NULL,major.release=c("2.10","2.11","2.12")) {
   if ( identical(stdout,TRUE) ) stdout <- ""
   if ( identical(stderr,TRUE) ) stderr <- ""
   debug <- identical(debug,TRUE)
@@ -9,9 +9,9 @@ scala <- function(classpath=character(),classpath.packages=character(),serialize
   port <- as.integer(port[1])
   if ( debug && serialize.output ) stop("When debug is TRUE, serialize.output must be FALSE.")
   if ( debug && ( identical(stdout,FALSE) || identical(stdout,NULL) || identical(stderr,FALSE) || identical(stderr,NULL) ) ) stop("When debug is TRUE, stdout and stderr must not be discarded.")
-  sInfo <- if ( is.null(scalaInfo) ) scalaInfo(scala.home) else scalaInfo
+  sInfo <- if ( is.null(scalaInfo) ) scalaInfo(scala.home, major.release) else scalaInfo
   if ( is.null(sInfo) ) stop('Please run "rscala::scalaInstall()" or install Scala manually.')
-  pkgJars <- unlist(lapply(classpath.packages, function(p) jarsOfPackage(p, sInfo$major.version)))
+  pkgJars <- unlist(lapply(classpath.packages, function(p) jarsOfPackage(p, sInfo$major.release)))
   userJars <- c(unlist(strsplit(classpath,.Platform$path.sep)),pkgJars)
   if ( is.null(command.line.options) ) {
     command.line.options <- getOption("rscala.command.line.options",default=NULL)
@@ -88,9 +88,7 @@ scalaEval <- function(interpreter,snippet,workspace) {
     if ( get("serializeOutput",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
   }, interrupt = function(x) {
     assign("open",FALSE,envir=interpreter[['env']])
-    close(interpreter[['socketOut']])
-    close(interpreter[['socketIn']])
-    message("Interpreter closed by interrupt.")
+    stop("## Interpreter closed by interrupt. ##")
   })
   if ( ( length(status) == 0 ) || ( status != OK ) ) stop("Error in evaluation.")
   else invisible(NULL)
@@ -128,7 +126,7 @@ toString.ScalaInterpreter <- function(x,...) {
 
 print.ScalaInterpreterReference <- function(x,...) {
   type <- x[['type']]
-  scalap(x[['interpreter']],type)
+  # scalap(x[['interpreter']],type)
   cat("ScalaInterpreterReference... ")
   cat(x[['identifier']],": ",type,"\n",sep="")
   invisible(x)
@@ -140,7 +138,7 @@ toString.ScalaInterpreterReference <- function(x,...) {
 
 print.ScalaCachedReference <- function(x,...) {
   type <- x[['type']]
-  scalap(x[['interpreter']],type)
+  # scalap(x[['interpreter']],type)
   cat("ScalaCachedReference... ")
   cat("*: ",type,"\n",sep="")
   invisible(x)
@@ -151,13 +149,13 @@ toString.ScalaCachedReference <- function(x,...) {
 }
 
 print.ScalaInterpreterItem <- function(x,...) {
-  scalap(x[['interpreter']],x[['snippet']])
-  cat("ScalaInterpreterItem\n")
+  # scalap(x[['interpreter']],x[['snippet']])
+  cat(toString(x),"\n",sep="")
   invisible(x)
 }
 
 toString.ScalaInterpreterItem <- function(x,...) {
-  "ScalaInterpreterItem"
+  paste0("ScalaInterpreterItem for ",x[['snippet']])
 }
 
 scalaGet <- function(interpreter,identifier,as.reference) {
@@ -259,9 +257,7 @@ scalaGet <- function(interpreter,identifier,as.reference) {
     value
   }, interrupt = function(x) {
     assign("open",FALSE,envir=interpreter[['env']])
-    close(interpreter[['socketOut']])
-    close(interpreter[['socketIn']])
-    message("Interpreter closed by interrupt.")
+    stop("## Interpreter closed by interrupt. ##")
   })
 }
 
@@ -284,6 +280,12 @@ scalaNull <- function(type) {
     result <- list(interpreter=interpreter,snippet=snippet)
     class(result) <- "ScalaInterpreterItem"
     result
+  } else if ( identifier == "var" ) function(x) {
+    if ( inherits(x,"ScalaCachedReference") && ( x[['type']] == "org.ddahl.rscala.PersistentReference" ) ) {
+      get(x$name(),envir=x[['interpreter']][['r']])
+    } else if ( is.character(x) && ( length(x) == 1 ) ) {
+      get(x,envir=interpreter[['r']])
+    } else stop("Argument must be a persistent R reference or a string ID of the persistent R reference.")
   } else if ( identifier == "val" ) function(x) {
     # warning(paste0("Syntax \"s$val()\" is deprecated and will be removed."))
     scalaGet(interpreter,x,NA)
@@ -295,8 +297,6 @@ scalaNull <- function(type) {
     result <- list(interpreter=interpreter,snippet=identifier)
     class(result) <- "ScalaInterpreterItem"
     result
-  } else if ( identifier %in% names(interpreter) ) {
-    stop("This item is not accessible via the '$' operator.")
   } else {
     scalaGet(interpreter,identifier,NA)
   }
@@ -366,9 +366,7 @@ scalaSet <- function(interpreter,identifier,value) {
     }
   }, interrupt = function(x) {
     assign("open",FALSE,envir=interpreter[['env']])
-    close(interpreter[['socketOut']])
-    close(interpreter[['socketIn']])
-    message("Interpreter closed by interrupt.")
+    stop("## Interpreter closed by interrupt. ##")
   })
   invisible()
 }
@@ -377,12 +375,19 @@ scalaSet <- function(interpreter,identifier,value) {
 '%.!%.ScalaInterpreter' <- function(interpreter,snippet) scalaDef(interpreter,snippet,TRUE)
 
 scalaDef <- function(interpreter,snippet,as.reference) {
-  snippet <- strintrpltIf(snippet,parent.frame(3),interpreter)
-  argsValues <- as.list(parent.frame(2))
+  pf <- parent.frame(2)
+  snippet <- strintrpltIf(snippet,pf,interpreter)
   argsFormals <- as.list(formals(sys.function(-3)))
+  argsFormals <- argsFormals[intersect(names(argsFormals),ls(envir=pf))]
+  argsValues <- if ( length(argsFormals) > 0 ) {
+    mget(names(argsFormals),envir=pf)
+  } else {
+    list()
+  }
+  if ( length(argsFormals) != length(argsValues) ) stop('A Scala function cannot have R code that defines new variables.')
   evaluate <- ! exists(".SCALA.OPTIMIZE", envir = parent.frame(3))
   func1 <- do.call(scalaFunctionArgs,c(list(.INTERPRETER=interpreter),argsFormals))
-  func2 <- scalaMkFunction(func1,snippet,as.reference=as.reference,parent.frame(2))
+  func2 <- scalaMkFunction(func1,snippet,as.reference=as.reference,pf)
   if ( evaluate ) do.call(func2,argsValues)
   else func2
 }
@@ -399,21 +404,22 @@ scalaOptimize <- function(scalaFunction) {
 }
 
 scalaFunctionArgs <- function(.INTERPRETER,...) {
-  argValues <- list(...)
-  argIdentifiers <- names(argValues)
-  if ( is.null(argIdentifiers) ) {
-    argIdentifiers <- paste0(rep('x',length(argValues)),seq_along(argValues))
-  } else if ( any(argIdentifiers=='' ) ) {
-    w <- argIdentifiers==''
-    argIdentifiers[w] <- paste0(rep('x',sum(w)),seq_along(argValues[argIdentifiers=='']))
+  cc(.INTERPRETER)
+  argsValues <- list(...)
+  argsIdentifiers <- names(argsValues)
+  if ( is.null(argsIdentifiers) ) {
+    argsIdentifiers <- paste0(rep('x',length(argsValues)),seq_along(argsValues))
+  } else if ( any(argsIdentifiers=='' ) ) {
+    w <- argsIdentifiers==''
+    argsIdentifiers[w] <- paste0(rep('x',sum(w)),seq_along(argsValues[argsIdentifiers=='']))
   }
-  if ( length(unique(argIdentifiers)) != length(argIdentifiers) ) stop('Argument names must be unique.')
-  header <- character(length(argValues))
-  for ( i in seq_along(argValues) ) {
-    value <- argValues[[i]]
-    name <- argIdentifiers[[i]]
+  if ( length(unique(argsIdentifiers)) != length(argsIdentifiers) ) stop('Argument names must be unique.')
+  header <- character(length(argsValues))
+  for ( i in seq_along(argsValues) ) {
+    value <- argsValues[[i]]
+    name <- argsIdentifiers[[i]]
     if ( is.null(value) ) {
-      header[i] <- paste0('val ',name,' = REphemeralReference("',name,'")')
+      header[i] <- paste0('val ',name,' = EphemeralReference("',name,'")')
     } else if ( inherits(value,"ScalaInterpreterReference") || inherits(value,"ScalaCachedReference") || inherits(value,"ScalaNullReference")) {
       header[i] <- paste0('val ',name,' = R.cached(R.evalS0("toString(',name,')")).asInstanceOf[',value[['type']],']')
     } else {
@@ -427,7 +433,7 @@ scalaFunctionArgs <- function(.INTERPRETER,...) {
       header[i] <- paste0('val ',name,' = R.get',type,len,'("',name,'")')
     }
   }
-  result <- list(interpreter=.INTERPRETER,identifiers=argIdentifiers,header=header)
+  result <- list(interpreter=.INTERPRETER,identifiers=argsIdentifiers,header=header)
   class(result) <- 'ScalaFunctionArgs'
   result
 }
@@ -469,21 +475,26 @@ scalaMkFunction <- function(func,body,as.reference,workspace) {
   functionSnippet <- strintrplt('
     function(@{paste(func$identifiers,collapse=", ")}) {
       .rsI <- @{interpreterName}
-      .rsWorkspace <- environment()
-      @{ifelse(get("debug",envir=interpreter[["env"]]),\'rscala:::msg(paste("Evaluating Scala function from environment",capture.output(print(.rsWorkspace))))\',"")}
-      rscala:::wb(.rsI,rscala:::INVOKE)
-      rscala:::wc(.rsI,"@{funcList$functionIdentifier}")
-      flush(.rsI[["socketIn"]])
-      rscala:::rServe(.rsI,TRUE,.rsWorkspace)
-      .rsStatus <- rscala:::rb(.rsI,"integer")
-      @{ifelse(get("serializeOutput",envir=interpreter[["env"]]),"rscala:::echoResponseScala(.rsI)","")}
-      if ( .rsStatus == rscala:::ERROR ) {
-        stop("Invocation error.")
-      } else {
-        .rsResult <- rscala:::scalaGet(.rsI,"?",@{as.reference})
-        if ( is.null(.rsResult) ) invisible(.rsResult)
-        else .rsResult
-      }
+      tryCatch({
+        .rsWorkspace <- environment()
+        @{ifelse(get("debug",envir=interpreter[["env"]]),\'rscala:::msg(paste("Evaluating Scala function from environment",capture.output(print(.rsWorkspace))))\',"")}
+        rscala:::wb(.rsI,rscala:::INVOKE)
+        rscala:::wc(.rsI,"@{funcList$functionIdentifier}")
+        flush(.rsI[["socketIn"]])
+        rscala:::rServe(.rsI,TRUE,.rsWorkspace)
+        .rsStatus <- rscala:::rb(.rsI,"integer")
+        @{ifelse(get("serializeOutput",envir=interpreter[["env"]]),"rscala:::echoResponseScala(.rsI)","")}
+        if ( .rsStatus == rscala:::ERROR ) {
+          stop("Invocation error.")
+        } else {
+          .rsResult <- rscala:::scalaGet(.rsI,"?",@{as.reference})
+          if ( is.null(.rsResult) ) invisible(.rsResult)
+          else .rsResult
+        }
+      }, interrupt = function(x) {
+        assign("open",FALSE,envir=.rsI[["env"]])
+        stop("## Interpreter closed by interrupt. ##")
+      })
     }
   ')
   functionDefinition <- eval(parse(text=functionSnippet),envir=workspace)
@@ -505,6 +516,10 @@ print.ScalaFunction <- function(x,...) {
 }
 
 scalaAutoMkFunction <- function(reference,method) {
+  if ( method == "type" ) {
+    if ( inherits(reference,"ScalaInterpreterItem") ) return(reference[['snippet']])
+    else return(reference[['type']])
+  }
   interpreter <- reference[['interpreter']]
   function(..., .AS.REFERENCE = NA, .EVALUATE = TRUE) {
     args <- list(...)
@@ -531,12 +546,24 @@ scalaAutoMkFunction <- function(reference,method) {
   }
 }
 
+scalaUnboxReference <- function(x) {
+  if ( ( ! inherits(x,"ScalaCachedReference") ) || ( x[['type']] != "org.ddahl.rscala.PersistentReference" ) ) {
+    stop("The argument must be a Scala reference to an PersistentReference.")
+  }
+  get(x$name(),envir=x[['interpreter']][['r']])
+}
+
 '$.ScalaCachedReference' <- scalaAutoMkFunction
 '$.ScalaInterpreterReference' <- scalaAutoMkFunction
 '$.ScalaInterpreterItem' <- scalaAutoMkFunction
 
 scalap <- function(interpreter,class.name) {
+  if ( inherits(interpreter,"ScalaInterpreterReference") || inherits(interpreter,"ScalaCachedReference") ) {
+    if ( ! missing(class.name) ) stop("'class.name' should not be provided if the first argument is a Scala reference.")
+    return(scalap(interpreter[['interpreter']],interpreter[['type']]))
+  }
   if ( ! inherits(interpreter,"ScalaInterpreter") ) stop("The first argument must be an interpreter.")
+  if ( ! identical(class(class.name),"character") || length(class.name) != 1 ) stop("The second argument must be a string.")
   cc(interpreter)
   tryCatch({
     wb(interpreter,SCALAP)
@@ -546,9 +573,7 @@ scalap <- function(interpreter,class.name) {
     if ( get("serializeOutput",envir=interpreter[['env']]) ) echoResponseScala(interpreter)
   }, interrupt = function(x) {
     assign("open",FALSE,envir=interpreter[['env']])
-    close(interpreter[['socketOut']])
-    close(interpreter[['socketIn']])
-    message("Interpreter closed by interrupt.")
+    stop("## Interpreter closed by interrupt. ##")
   })
 }
 
@@ -562,21 +587,22 @@ close.ScalaInterpreter <- function(con,...) {
   close(con[['socketIn']])
 }
 
-jarsOfPackage <- function(pkgname, major.version) {
-  jarsMajor <- list.files(file.path(system.file("java",package=pkgname),paste0("scala-",major.version)),pattern=".*\\.jar$",full.names=TRUE,recursive=FALSE)
+jarsOfPackage <- function(pkgname, major.release) {
+  if ( ! ( pkgname %in% installed.packages() )  ) stop(paste0("Package ",pkgname," is not installed, but its JARs were requested."))
+  jarsMajor <- list.files(file.path(system.file("java",package=pkgname),paste0("scala-",major.release)),pattern=".*\\.jar$",full.names=TRUE,recursive=FALSE)
   jarsAny <- list.files(system.file("java",package=pkgname),pattern=".*\\.jar$",full.names=TRUE,recursive=FALSE)
   c(jarsMajor,jarsAny)
 }
 
-.rscalaPackage <- function(pkgname, snippet=character(), classpath.packages=character(), classpath.prepend=character(), classpath.append=character(), ...) {
+.rscalaPackage <- function(pkgname, snippet=character(), classpath.packages=character(), classpath.prepend=character(), classpath.append=character(), major.release=c("2.10","2.11","2.12"), ...) {
   env <- parent.env(parent.frame())    # Environment of depending package (assuming this function is only called in .onLoad function).
   assign(".rscalaPackageEnv",new.env(parent=emptyenv()), envir=env)
   assign("sIsForced",FALSE,envir=get(".rscalaPackageEnv",envir=env))
   # Lazy initialization of 's' in environment of depending package
   delayedAssign("s", {
-    sInfo <- scalaInfo()
+    sInfo <- scalaInfo(major.release=major.release)
     if ( is.null(sInfo) ) stop('Please run "rscala::scalaInstall()" or install Scala manually.')
-    pkgJars <- unlist(lapply(c(pkgname,classpath.packages), function(p) jarsOfPackage(p, sInfo$major.version)))
+    pkgJars <- unlist(lapply(c(pkgname,classpath.packages), function(p) jarsOfPackage(p, sInfo$major.release)))
     classpath.prepend <- unlist(strsplit(classpath.prepend,.Platform$path.sep))
     classpath.append <- unlist(strsplit(classpath.append,.Platform$path.sep))
     classpath <- c(classpath.prepend,pkgJars,classpath.append)
@@ -618,13 +644,28 @@ jarsOfPackage <- function(pkgname, major.version) {
   invisible()
 }
 
-.rscalaJar <- function(major.version=c("2.12","2.11","2.10")[1]) {
-  major.version <- substr(major.version,1,4)
-  if ( ! ( major.version %in% c("2.10","2.11","2.12") ) ) stop("Unsupported major version.")
-  jarsOfPackage("rscala",major.version)
+.rscalaJar <- function(major.release=c("2.10","2.11","2.12")) {
+  if ( length(major.release) > 1 ) {
+    return(sapply(major.release,.rscalaJar,USE.NAMES=FALSE))
+  }
+  if ( length(major.release) == 0 ) stop("At least one major release must be supplied.")
+  if ( is.na(major.release) ) {
+    javaVersion <- javaVersion(findJava())
+    if ( javaVersion <= 7 ) major.release <- "2.11"
+    else major.release <- "2.12"
+  }
+  major.release <- substr(major.release,1,4)
+  if ( ! ( major.release %in% c("2.10","2.11","2.12") ) ) stop(paste("Unsupported major release:",major.release))
+  result <- jarsOfPackage("rscala",major.release)
+  names(result) <- major.release
+  result
 }
 
-scalaInfoEngine <- function(scala.command,verbose) {
+latest <- function() {
+  install.packages('https://dahl.byu.edu/public/rscala_LATEST.tar.gz',repos=NULL,type='source')
+}
+
+scalaInfoEngine <- function(scala.command,major.release,verbose) {
   scala.command <- normalizePath(scala.command,mustWork=FALSE)
   if ( ! file.exists(scala.command) ) return(NULL)
   if ( verbose ) {
@@ -637,7 +678,7 @@ scalaInfoEngine <- function(scala.command,verbose) {
   if ( length(libraryJar) == 0 ) {
     if ( verbose ) cat(tab,sprintf("scala-library.jar is not in 'lib' directory of assumed Scala home (%s)\n",scala.home),sep="")
     scala.home <- NULL
-    if ( .Platform$OS != "windows" ) {
+    if ( .Platform$OS.type != "windows" ) {
       if ( verbose ) cat(tab,"Looking for 'scala.home' property in 'scala' script\n",sep="")
       showArguments <- system.file(file.path("bin","showArguments"),package="rscala")
       scala.home <- suppressWarnings(
@@ -668,7 +709,7 @@ scalaInfoEngine <- function(scala.command,verbose) {
     }
   }
   libraryJar <- libraryJar[1]
-  major.version <- tryCatch({
+  actual.major.release <- tryCatch({
     fn <- unz(libraryJar,"library.properties")
     lines <- readLines(fn)
     close(fn)
@@ -676,18 +717,19 @@ scalaInfoEngine <- function(scala.command,verbose) {
     if ( substr(version,4,4) == "." ) substr(version,1,3)
     else substr(version,1,4)
   },error=function(e) { NULL } )
-  if ( is.null(major.version) ) {
+  if ( is.null(actual.major.release) ) {
     if ( verbose ) cat(sprintf("Cannot get Scala version from library jar (%s)\n",libraryJar))
     return(NULL)
   }
-  if ( ! ( major.version %in% c("2.10","2.11","2.12") ) ) {
-    if ( verbose ) cat(sprintf("Unsupported major version (%s) from Scala executable (%s)\n",major.version,scala.command))
+  if ( ! ( actual.major.release %in% major.release ) ) {
+    if ( verbose ) cat(sprintf("      Major release %s is not what was requested: %s\n",actual.major.release,paste(major.release,collapse=", ")))
     return(NULL)
   }
-  list(cmd=scala.command,home=scala.home,version=version,major.version=major.version)
+  list(cmd=scala.command,home=scala.home,version=version,major.release=actual.major.release)
 }
 
-scalaInfo <- function(scala.home=NULL,verbose=FALSE) {
+scalaInfo <- function(scala.home=NULL,major.release=c("2.10","2.11","2.12"),verbose=FALSE) {
+  if ( inherits(scala.home,"ScalaInterpreter") ) return(get("info",scala.home[['env']]))
   if ( verbose ) cat("\nSearching for a suitable Scala installation.\n")
   tab <- "  * "
   if ( verbose ) {
@@ -699,16 +741,16 @@ scalaInfo <- function(scala.home=NULL,verbose=FALSE) {
     if ( verbose ) cat(tab,failureMsg,techniqueMsg," is NULL","\n",sep="")
   } else {
     # Attempt 1
-    info <- scalaInfoEngine(file.path(scala.home,"bin","scala"),verbose)
+    info <- scalaInfoEngine(file.path(scala.home,"bin","scala"),major.release,verbose)
     if ( verbose ) techniqueMsg <- sprintf("'scala.home' (%s) argument",scala.home)
     if ( ! is.null(info) ) { if ( verbose ) cat(tab,successMsg,techniqueMsg,"\n\n",sep=""); return(info) }
     else if ( verbose ) cat(tab,failureMsg,techniqueMsg,"\n",sep="")
     stop("Cannot find Scala using 'scala.home' argument.  Expand search by *not* specifying 'scala.home' argument.")
   }
   # Attempt 2
-  scala.home.tmp <- getOption("rscala.scala.home",default="")
-  info <- if ( scala.home.tmp != "" ) {
-    scalaInfoEngine(file.path(scala.home.tmp,"bin","scala"),verbose)
+  scala.home.tmp <- getOption("rscala.scala.home",default="<UNSET>")
+  info <- if ( scala.home.tmp != "<UNSET>" ) {
+    scalaInfoEngine(file.path(scala.home.tmp,"bin","scala"),major.release,verbose)
   } else NULL
   if ( verbose ) techniqueMsg <- sprintf("'rscala.scala.home' (%s) global option",scala.home.tmp)
   if ( ! is.null(info) ) { if ( verbose ) cat(tab,successMsg,techniqueMsg,"\n\n",sep=""); return(info) }
@@ -717,12 +759,12 @@ scalaInfo <- function(scala.home=NULL,verbose=FALSE) {
   scala.home.tmp <- Sys.getenv("SCALA_HOME")
   if ( verbose ) techniqueMsg <- sprintf("SCALA_HOME (%s) environment variable",scala.home.tmp)
   info <- if ( scala.home.tmp != "" ) {
-    scalaInfoEngine(file.path(scala.home.tmp,"bin","scala"),verbose)
+    scalaInfoEngine(file.path(scala.home.tmp,"bin","scala"),major.release,verbose)
   } else NULL
   if ( ! is.null(info) ) { if ( verbose ) cat(tab,successMsg,techniqueMsg,"\n\n",sep=""); return(info) }
   else if ( verbose ) cat(tab,failureMsg,techniqueMsg,"\n",sep="")
   # Attempt 4
-  info <- scalaInfoEngine(Sys.which("scala"),verbose)
+  info <- scalaInfoEngine(Sys.which("scala"),major.release,verbose)
   if ( verbose ) techniqueMsg <- "'scala' in the shell's search path"
   if ( ! is.null(info) ) { if ( verbose ) cat(tab,successMsg,techniqueMsg,"\n\n",sep=""); return(info) }
   else if ( verbose ) cat(tab,failureMsg,techniqueMsg,"\n",sep="")
@@ -732,22 +774,70 @@ scalaInfo <- function(scala.home=NULL,verbose=FALSE) {
   details <- details[order(as.POSIXct(details$mtime),decreasing=TRUE), ]
   candidates <- rownames(details)
   for ( installDir in candidates ) {
-    info <- scalaInfoEngine(file.path(installDir,"bin","scala"),verbose)
+    info <- scalaInfoEngine(file.path(installDir,"bin","scala"),major.release,verbose)
     if ( verbose ) techniqueMsg <- sprintf("special installation directory (%s)",installDir)
     if ( ! is.null(info) ) { if ( verbose ) cat(tab,successMsg,techniqueMsg,"\n\n",sep=""); return(info) }
     else if ( verbose ) cat(tab,failureMsg,techniqueMsg,"\n",sep="")
   }
   # Attempt 6
-  if ( ! verbose ) scalaInfo(scala.home=scala.home,verbose=TRUE)
+  if ( ! verbose ) scalaInfo(scala.home=scala.home,major.release=major.release,verbose=TRUE)
   else {
     cat("\nCannot find a suitable Scala installation.\n\n")
-    f <- file(system.file("README",package="rscala"),open="r")
-    readme <- readLines(f)
-    close(f)
-    cat(readme,sep="\n")
-    cat("\n")
-    invisible(NULL)
+    readmePath <- system.file("README",package="rscala")
+    if ( readmePath != "" ) {
+      cat(readLines(readmePath),sep="\n")
+      cat("\n")
+    }
+    if ( interactive() ){
+      actual.major.release <- lastestVersion(major.release)
+      if ( askToInstall(actual.major.release) ) {
+        scalaInstall(actual.major.release)
+        scalaInfo(scala.home=scala.home,major.release=actual.major.release)
+      } else invisible()
+    } else invisible()
   }
+}
+
+askToInstall <- function(major.release) {
+  while ( TRUE ) {
+    response <- readline(prompt=paste("Would you like to install Scala",major.release,"now? [Y/n] "))
+    response <- toupper(trimws(response))
+    if ( response == "" ) response <- "Y"
+    if ( response == "Y" ) return(TRUE)
+    if ( response == "N" ) return(FALSE)
+  }
+}
+
+findJava <- function() {  ## Mimic how the 'scala' shell script finds Java.
+  javaName <- if ( .Platform$OS.type == "windows" ) "java.exe" else "java"
+  fromPath <- function() {
+    candidate <- Sys.which(javaName)[[javaName]]
+    if ( ! file.exists(candidate) ) stop("Cannot find Java.  Is it installed?")
+    candidate
+  }
+  candidate <- Sys.getenv("JAVACMD",NA)
+  if ( ! is.na(candidate) && file.exists(candidate) ) normalizePath(candidate)
+  else {
+    javaHome <- Sys.getenv("JAVA_HOME",NA)
+    if ( ! is.na(javaHome) ) {
+      candidate <- file.path(javaHome,"bin",javaName)
+      if ( file.exists(candidate) ) normalizePath(candidate)
+      else fromPath()
+    } else fromPath()
+  }
+}
+
+javaVersion <- function(javaCmd) {
+  response <- system2(javaCmd,"-version",stdout=TRUE,stderr=TRUE)
+  regexp <- '(java|openjdk) version "(.*)"'
+  line <- response[grepl(regexp,response)]
+  if ( length(line) != 1 ) stop(paste0("Cannot determine Java version.\n",paste(response,collapse="\n")))
+  versionString <- gsub(regexp,"\\2",line)
+  versionParts <- strsplit(versionString,"\\.")[[1]]
+  if ( versionParts[1] != '1' ) stop(paste0("Unexpected Java version.\n",paste(response,collapse="\n")))
+  versionNumber <- as.numeric(versionParts[2])
+  if ( ! ( versionNumber %in% c(6,7,8) ) ) stop(paste0("Unsupported Java version.\n",paste(response,collapse="\n")))
+  versionNumber
 }
 
 evalAndGet <- function(interpreter,snippet,as.reference,workspace) {
@@ -801,7 +891,7 @@ wb <- function(c,v) {
 }
 
 wc <- function(c,v) {
-  bytes <- charToRaw(v)
+  bytes <- charToRaw(iconv(v, to="UTF-8"))
   wb(c,length(bytes))
   writeBin(bytes, c[['socketIn']], endian="big", useBytes=TRUE)
 }
@@ -818,7 +908,7 @@ rc <- function(c) {
   length <- rb(c,"integer")
   r <- raw(0)
   while ( length(r) != length ) r <- c(r,readBin(c[['socketOut']], "raw", length-length(r), endian="big"))
-  rawToChar(r)
+  iconv(rawToChar(r),from="UTF-8")
 }
 
 pretty <- function(header,body) {
@@ -833,11 +923,26 @@ pretty <- function(header,body) {
   paste0(paste(c(headerWithPadding,bodyWithPadding),collapse='\n'),'\n')
 }
 
-scalaInstall <- function(major.version=c("2.12","2.11","2.10")[1]) {
-  if ( major.version == "2.12" ) version <- SCALA_212_VERSION
-  else if ( major.version == "2.11" ) version <- SCALA_211_VERSION
-  else if ( major.version == "2.10" ) version <- SCALA_210_VERSION
-  else stop("Unsupported major version.")
+lastestVersion <- function(major.release) {
+  max <- major.release[1]
+  for ( i in major.release[-1] ) {
+    if ( compareVersion(max,i) < 0 ) max <- i
+  }
+  max
+}
+
+scalaInstall <- function(major.release=c("2.10","2.11","2.12")) {
+  if ( length(major.release) > 1 ) return(scalaInstall(lastestVersion(major.release)))
+  if ( length(major.release) == 0 ) stop("At least one major release must be supplied.")
+  javaVersion <- javaVersion(findJava())
+  if ( ( javaVersion <= 7 ) && ( compareVersion("2.11",major.release) < 0 ) ) {
+    cat("It appears you are using an old version of Java, so Scala 2.11 will be installed.\n")
+    return(scalaInstall("2.11"))
+  }
+  if ( major.release == "2.12" ) version <- SCALA_212_VERSION
+  else if ( major.release == "2.11" ) version <- SCALA_211_VERSION
+  else if ( major.release == "2.10" ) version <- SCALA_210_VERSION
+  else stop("Unsupported major release.")
   installPath <- normalizePath(file.path("~",".rscala"),mustWork=FALSE)
   url <- sprintf("http://downloads.lightbend.com/scala/%s/scala-%s.tgz",version,version)
   dir.create(installPath,showWarnings=FALSE,recursive=TRUE)
@@ -846,7 +951,7 @@ scalaInstall <- function(major.version=c("2.12","2.11","2.10")[1]) {
   if ( result != 0 ) return(invisible(result))
   result <- untar(destfile,exdir=installPath,tar="internal")    # Use internal to avoid problems on a Mac.
   unlink(destfile)
-  if ( result == 0 ) cat("Successfully installed Scala in ",file.path(installPath,sprintf("scala-%s",version)),"\n",sep="")
+  if ( result == 0 ) cat("Successfully installed Scala in ",file.path(installPath,sprintf("scala-%s",version)),"\n\n",sep="")
   invisible(result)
 }
 

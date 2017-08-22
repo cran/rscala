@@ -25,7 +25,7 @@ paths to JAR files, installation directories, the Scala executable, and this
 package.  Note that if you only want to embed R in a Scala application, you do
 not need to install the package. Simply add the following line to the your SBT
 build.sbt file: \sQuote{libraryDependencies += "org.ddahl" %% "rscala" %
-"_VERSION_"}, where _VERSION_ is the rscala version number (i.e., 2.2.2).
+"_VERSION_"}, where _VERSION_ is the rscala version number (i.e., 2.3.1).
 
 \code{\link{scalaInstall}} downloads and installs Scala in \dQuote{~/.rscala}
 in the user's home directory.  System administrators can install Scala
@@ -47,19 +47,21 @@ that \code{close(s)} is called (if needed).
 }
 \usage{
 scala(classpath=character(), classpath.packages=character(),
-      serialize.output=FALSE, scala.home=NULL,
+      serialize.output=.Platform$OS.type=="windows", scala.home=NULL,
       heap.maximum=NULL, command.line.options=NULL, row.major=TRUE,
       timeout=60, debug=FALSE, stdout=TRUE, stderr=TRUE, port=0,
-      scalaInfo=NULL)
+      scalaInfo=NULL, major.release=c("2.10","2.11","2.12"))
 
-scalaInfo(scala.home=NULL, verbose=FALSE)
+scalaInfo(scala.home=NULL, major.release=c("2.10","2.11","2.12"),
+          verbose=FALSE)
 
-scalaInstall(major.version=c("2.12","2.11","2.10")[1])
+scalaInstall(major.release=c("2.10","2.11","2.12"))
 
-.rscalaJar(major.version=c("2.12","2.11","2.10")[1])
+.rscalaJar(major.release=c("2.10","2.11","2.12"))
 
 .rscalaPackage(pkgname, snippet=character(), classpath.packages=character(),
-               classpath.prepend=character(), classpath.append=character(), ...)
+               classpath.prepend=character(), classpath.append=character(),
+               major.release=c("2.10","2.11","2.12"), ...)
 
 .rscalaPackageUnload()
 
@@ -68,8 +70,8 @@ scalaInstall(major.version=c("2.12","2.11","2.10")[1])
 \arguments{
     \item{classpath}{A character vector whose elements are paths to JAR files or directories which specify the classpath for the Scala compiler/interpreter.}
     \item{classpath.packages}{A character vector giving names of other installed packages whose JAR files should be appended to the classpath.}
-    \item{serialize.output}{Should standard output (stdout) and standard error (stderr) be captured and serialized back to R?  \code{FALSE} (the default) is recommended except on Windows where \code{TRUE} may be needed to see output and error messages.}
-    \item{scala.home}{A character vector of length one giving the path where Scala is installed.  When set to \code{NULL} (the default), the function sequentially tries to find the Scala home by:  i. querying the glocal option \var{rscala.scala.home}, ii. using the environment variable \code{SCALA_HOME}, iii. querying the operating system search path, and iv. looking in subdirectories of \code{~/.rscala}.  If all these fail, the function displaces a message to help the user install Scala.}
+    \item{serialize.output}{Should standard output (stdout) and standard error (stderr) be captured and serialized back to R?  The default is \code{TRUE} on Windows and \code{FALSE} on other operating systems.  \code{FALSE} requires less computing and is usually not necessary on Linux and Mac OS X.  Depending on the environment and operating system in which R is run, \code{TRUE} may be needed to see output and error messages.}
+    \item{scala.home}{A character vector of length one giving the path where Scala is installed.  When set to \code{NULL} (the default), the function sequentially tries to find the Scala home by:  i. querying the glocal option \var{rscala.scala.home}, ii. using the environment variable \code{SCALA_HOME}, iii. querying the operating system search path, and iv. looking in subdirectories of \code{~/.rscala}.  If all these fail, the function displaces a message to help the user install Scala.  Alternatively, in the class of \code{\link{scalaInfo}}, \code{scala.home} may also be the result of the \code{\link{scala}} function.}
     \item{heap.maximum}{A character vector of length one used to specify the maximum heap size in the JVM.  If \code{NULL}, the global option \var{rscala.heap.maximum} is queried and, if that is also \code{NULL}, Scala's default value is used.  This option is ignored if \var{command.line.options} is not null.}
     \item{command.line.options}{A character vector whose elements are passed as command line arguments when invoking Scala.  If \code{NULL}, the global option \var{rscala.command.line.options} is queried and, if that is also \code{NULL}, the value is set to \code{NULL}.  A value of \code{NULL} means no extra arguments are provided.  If you simply want to add to the classpath and/or set the maximum heap size, use the \var{classpath} and \var{heap.maximum} arguments.}
     \item{row.major}{Should matrices in Scala be row major?}
@@ -79,9 +81,9 @@ scalaInstall(major.version=c("2.12","2.11","2.10")[1])
     \item{port}{If \code{0}, two random ports are selected.  Otherwise, \code{port} and \code{port+1} are used to the TCP/IP connections.}
     \item{scalaInfo}{The result of a previous call to \code{\link{scalaInfo}}.}
     \item{verbose}{A logical vector of length one indicating whether information regarding the search for the Scala installation should be displayed.}
-    \item{major.version}{A string specifying the major Scala version (e.g., "2.12").}
+    \item{major.release}{The character vector giving acceptable major.release numbers (e.g., c("2.10","2.11","2.12")), or \code{NA} in which case the system picks the appropriate version.}
     \item{pkgname}{A character string giving the name of the package (as provided the second argument of the \code{.onLoad} function) that wishes to depend on this package.}
-    \item{snippet}{A character vector providing Scala code that will evaluated when the interpreter in the package namespace is first used.}
+    \item{snippet}{A character vector providing Scala code that will be evaluated when the interpreter in the package namespace is first used.}
     \item{classpath.prepend}{A character vector giving the full path to JAR files to add to the \emph{beginning} of the classpath for the Scala compiler/interpreter embedded within a package via the \code{\link{.rscalaPackage}} function.  The JAR files in the package's \sQuote{java} directory are already included and do not need to be added here.}
     \item{classpath.append}{A character vector giving the full path to JAR files to add to the \emph{end} of the classpath for the Scala compiler/interpreter embedded within a package via the \code{\link{.rscalaPackage}} function.  The JAR files in the package's \sQuote{java} directory are already included and do not need to be added here.}
     \item{...}{These arguments are passed by the \code{\link{.rscalaPackage}} function to the \code{\link{scala}} function.}
@@ -97,7 +99,7 @@ David B. Dahl \email{dahl@stat.byu.edu}
 }
 \seealso{
   \code{\link{scalaSettings}},
-  \code{\link{scalap}},
+%  \code{\link{scalap}},
   \code{\link{strintrplt}},
   \code{\link{rscala-package}}
 }
@@ -140,8 +142,6 @@ s$foo
 
 # Instantiate an object
 seed <- 2349234L
-scalap(s,'scala.util.Random')
-s$.scala.util.Random                   # More convenient that using scalap.
 rng <- s$.scala.util.Random$new(seed)  # Scala equivalent: new scala.util.Random(seed)
 
 # Call method of a reference
@@ -196,9 +196,7 @@ sampler <- function(nDraws=1L, rho=0.0, rng=scalaNull("scala.util.Random")) s \%
   result
 '
 system.time(acf(sampler(n.draws,0.5,rng),plot=FALSE))
-system.time(acf(sampler(n.draws,0.9,rng),plot=FALSE))
-sampler2 <- scalaOptimize(sampler)
-system.time(acf(sampler2(n.draws,0.9,rng),plot=FALSE))
+system.time(acf(sampler(n.draws,0.5,rng),plot=FALSE))
 close(s)
 }
 }
