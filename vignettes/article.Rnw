@@ -1,5 +1,5 @@
 %\VignetteEngine{knitr::knitr}
-%\VignetteIndexEntry{rscala: Integration of R and Scala}
+%\VignetteIndexEntry{Integration of R and Scala Using rscala}
 
 \documentclass[article]{jss}
 
@@ -49,12 +49,12 @@
 
 %% almost as usual
 \author{David B.\ Dahl\\Brigham Young University}
-\title{\textit{\Large Under Review\\\footnotesize Software Version: 2.3.1,\ \ Document Date: 2017-08-22}\\\vspace{5ex} Integration of \R and \Scala Using \rscala}
+\title{\textit{\Large Under Review\\\footnotesize Software Version: 2.3.2,\ \ Document ID: 2017-08-25}\\\vspace{5ex} Integration of \R and \Scala Using \rscala}
 
 %% for pretty printing and a nice hypersummary also set:
 \Plainauthor{David B. Dahl} %% comma-separated
-\Plaintitle{rscala: Integration of R and Scala} %% without formatting
-\Shorttitle{\rscala: Integration of \R and \Scala} %% a short title (if necessary)
+\Plaintitle{Integration of R and Scala Using rscala} %% without formatting
+\Shorttitle{Integration of \R and \Scala Using \rscala} %% a short title (if necessary)
 
 %% an abstract and keywords
 \Abstract{
@@ -342,10 +342,11 @@ should not access the same \Scala instance simultaneously.
 Snippets of \Scala code can be compiled and executed within an \R session using
 several operators.  The most basic operator is \code{\%@\%} which evaluates
 \Scala code and returns \code{NULL}.  Consider, for example, computing the
-binomial coefficient ${10 \choose 3} = \prod_{i=1}^3 (10-i+1)/i$.  The code
-below uses \Scala's \code{val} statement to define an immutable variable
-\code{c_10_3} by computing the \code{product} of applications of the
-higher-order \code{map} function to a range \code{1 to 3}.
+binomial coefficient ${10 \choose 3} = \prod_{i=1}^3 (10-i+1)/i$.  The code below
+uses \Scala's \code{val} statement to define an immutable variable
+\code{c_10_3}.  The expression \code{1 to 3} creates a range and the higher-order \code{map} method of the
+range applies the function \code{(10-i+1) / i.toDouble} to each element \code{i} in the range.
+Finally, the results are multiplied together by the \code{product} method.
 
 <<evaluateScalaCodeSimple>>=
 s %@% '
@@ -561,7 +562,9 @@ is the slowest and awkward when arguments are not easily set with string
 interpolation.  The second (using \code{s\$.}) is concise, fast, and flexible
 in the arguments.  The string literal following \code{s\$.} and before the
 second \code{\$} (e.g., \code{scala.util.Random}) can be the name of any class
-in the classpath.  The last method (using \code{s\$do}) is also fast and
+in the classpath.
+(The period in \code{s\$.} is used to differentiate class names from variables names.)
+The last method (using \code{s\$do}) is also fast and
 flexible but is slightly awkward.  It has the added advantage, however, that
 the class name given as the argument to \code{s\$do} can be a literal (as in
 this example) or a variable.  Note that \code{do} is a reserved word in \Scala
@@ -1286,15 +1289,15 @@ application, simply add the following line to SBT's \code{build.sbt} file.
 % version (\code{org.ddahl.rscala.RClient}).  The wrapper hides \Scala-specific
 % features and provides familiar Javadoc to \Java developers.
 
-<<sbt, engine="scala", eval=FALSE>>=
-libraryDependencies += "org.ddahl" %% "rscala" % "2.3.1"
+<<sbt, engine="scala",eval=FALSE>>=
+libraryDependencies += "org.ddahl" %% "rscala" % "2.3.2"
 @
 
 Note that, since the necessary \R code is bundled in the JAR file, the \rscala
 package does \emph{not} need to be installed in \R.  An embedded \R interpreter
 is instantiated as follows:
 
-<<scalaScript0,engine="scala",engine.opts=paste0('-cp ',scalaInfo(s)$classpath),comment="//",eval=FALSE>>=
+<<scalaScript0,engine="scala",eval=FALSE>>=
 val R = org.ddahl.rscala.RClient()
 @
 
@@ -1312,7 +1315,7 @@ functions, facilitate calculations, manage data, and produce plots in a \Scala
 application.  Consider, for example, wrapping \R's \code{qnorm} function to
 define a method in \Scala by the same name.
 
-<<scalaScript1qnorm,engine="scala",engine.opts=paste0('-cp ',scalaInfo(s)$classpath),comment="//">>=
+<<scalaScript1qnorm,engine="scala",engine.path=scalaInfo(s)$cmd,engine.opts=paste0('-cp ',scalaInfo(s)$classpath),comment="//">>=
 val R = org.ddahl.rscala.RClient()
 
 def qnorm(x: Double, mean: Double = 0, sd: Double = 1, lowerTail: Boolean = true) = {
@@ -1329,7 +1332,7 @@ statistical calculation is easily implemented in \R, one can imagine a \Scala
 application that needs to perform a more taxing calculation that leverages \R's
 rich data-processing functions.
 
-<<scalaScript1europe,engine="scala",engine.opts=paste0('-cp ',scalaInfo(s)$classpath),comment="//">>=
+<<scalaScript1europe,engine="scala",engine.path=scalaInfo(s)$cmd,engine.opts=paste0('-cp ',scalaInfo(s)$classpath),comment="//">>=
 val R = org.ddahl.rscala.RClient()
 val distances = R.evalD2("as.matrix(eurodist)")
 val cities = R.evalS1("attr(eurodist,'Labels')")
@@ -1567,8 +1570,11 @@ distribution and set $p_1=0.75$ and $p_2=0.35$, making $\beta_1/\beta_2 \approx
 -1.75$.  We use \code{nIntervals} = 10,000 Monte Carlo replicates, each having
 \code{nSamples} = 10,000 bootstrap samples.
 
-The four implementations of the algorithm are included in the
-Appendix.  The \R implementation is the shortest and the \rscala implementation
+The four implementations are available in the
+Appendix, in the package, and at
+{\footnotesize
+\url{https://raw.githubusercontent.com/dbdahl/rscala/master/R/rscala/inst/doc/bootstrap-coverage.R}}.
+The \R implementation is the shortest and the \rscala implementation
 is somewhat more concise than the \Rcpp implementation.  The pure \R
 iterates using apply functions.  The \Rcpp implementation is
 written in \C style.  The pure \R, \Rcpp, and second \rscala implementations
@@ -1672,7 +1678,7 @@ Richard Payne.
 
 {
 \footnotesize
-\VerbatimInput[numbers=left,xleftmargin=5mm]{bootstrap-coverage.R}
+\VerbatimInput[numbers=left,xleftmargin=5mm]{../inst/doc/bootstrap-coverage.R}
 }
 
 \end{document}
