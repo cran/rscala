@@ -1,8 +1,8 @@
 Package: rscala
 Type: Package
 Title: Bi-Directional Interface Between 'R' and 'Scala' with Callbacks
-Version: 2.3.5
-Date: 2017-08-30
+Version: 2.4.0
+Date: 2017-09-27
 Authors@R: person(given="David B.",family="Dahl",role=c("aut","cre"),email="dahl@stat.byu.edu")
 URL: https://github.com/dbdahl/rscala
 BugReports: https://github.com/dbdahl/rscala/issues
@@ -13,8 +13,8 @@ License: GPL (>= 2) | BSD_3_clause + file LICENSE
 VignetteBuilder: knitr
 Suggests: knitr, microbenchmark, rJava, xtable
 NeedsCompilation: no
-Packaged: 2017-08-30 16:25:52 UTC; dahl
+Packaged: 2017-09-27 22:52:29 UTC; dahl
 Author: David B. Dahl [aut, cre]
 Maintainer: David B. Dahl <dahl@stat.byu.edu>
 Repository: CRAN
-Date/Publication: 2017-08-30 20:25:55 UTC
+Date/Publication: 2017-09-28 08:01:01 UTC

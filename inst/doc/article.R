@@ -167,7 +167,8 @@ augmentedList <- list$':+'(100L)
 paste0(augmentedList$toString(), " now contains 100.")
 
 ## ----bellUsingR-------------------------------------------------------------------------
-bell.version1 <- function(n=1, format=c("character","integer","double","log")[3]) {
+bell.version1 <- function(n, format=c("character","integer","double","log")[3]) {
+  n <- as.integer(n[1])
   if ( n <= 0 ) stop("'n' must be at least 1.")
   if ( n == 1 ) return(1)
   r1 <- r2 <- numeric(n)
@@ -185,7 +186,8 @@ bell.version1 <- function(n=1, format=c("character","integer","double","log")[3]
 }
 
 ## ----bellUsingScala---------------------------------------------------------------------
-bell.version2 <- function(n=1L, format=c("character","integer","double","log")[3]) {
+bell.version2 <- function(n, format=c("character","integer","double","log")[3]) {
+  n <- as.integer(n[1])
   if ( n <= 0 ) stop("'n' must be at least 1.")
   s %!% '
     var r1 = new Array[BigInt](n)
@@ -251,7 +253,7 @@ f <- function(n,alpha) sapply(alpha, function(a) sum(a / (1:n + a - 1)))
 f(100, 1.0)
 
 ## ----rootFinding------------------------------------------------------------------------
-bisection <- function(func=NULL, lower=1.0, upper=1.0, epsilon=0.000000001) s %!% '
+bisection <- function(func, lower=1.0, upper=1.0, epsilon=0.000000001) s %!% '
   def g(x: Double) = R.invokeD0(func, x)
   val (fLower, fUpper) = (g(lower), g(upper))
   if ( fLower * fUpper > 0 ) sys.error("lower and upper do not straddle the root.")

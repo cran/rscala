@@ -5,7 +5,6 @@
 \alias{.rscalaJar}
 \alias{.rscalaPackage}
 \alias{.rscalaPackageUnload}
-\alias{.rscalaDelay}
 \docType{methods}
 \title{
 Create an Instance of an Embedded Scala Interpreter
@@ -25,7 +24,7 @@ paths to JAR files, installation directories, the Scala executable, and this
 package.  Note that if you only want to embed R in a Scala application, you do
 not need to install the package. Simply add the following line to the your SBT
 build.sbt file: \sQuote{libraryDependencies += "org.ddahl" %% "rscala" %
-"_VERSION_"}, where _VERSION_ is the rscala version number (i.e., 2.3.5).
+"_VERSION_"}, where _VERSION_ is the rscala version number (i.e., 2.4.0).
 
 \code{\link{scalaInstall}} downloads and installs Scala in \dQuote{~/.rscala}
 in the user's home directory.  System administrators can install Scala
@@ -55,7 +54,7 @@ scala(classpath=character(), classpath.packages=character(),
 scalaInfo(scala.home=NULL, major.release=c("2.10","2.11","2.12"),
           verbose=FALSE)
 
-scalaInstall(major.release=c("2.10","2.11","2.12"))
+scalaInstall(major.release=c("2.10","2.11","2.12"), global=FALSE)
 
 .rscalaJar(major.release=c("2.10","2.11","2.12"))
 
@@ -64,8 +63,6 @@ scalaInstall(major.release=c("2.10","2.11","2.12"))
                major.release=c("2.10","2.11","2.12"), ...)
 
 .rscalaPackageUnload()
-
-.rscalaDelay(expression)
 }
 \arguments{
     \item{classpath}{A character vector whose elements are paths to JAR files or directories which specify the classpath for the Scala compiler/interpreter.}
@@ -82,12 +79,12 @@ scalaInstall(major.release=c("2.10","2.11","2.12"))
     \item{scalaInfo}{The result of a previous call to \code{\link{scalaInfo}}.}
     \item{verbose}{A logical vector of length one indicating whether information regarding the search for the Scala installation should be displayed.}
     \item{major.release}{The character vector giving acceptable major.release numbers (e.g., c("2.10","2.11","2.12")), or \code{NA} in which case the system picks the appropriate version.}
+    \item{global}{Should the Scala installation be global, specifically inside the package's directory?  This may require administrator privileges.}
     \item{pkgname}{A character string giving the name of the package (as provided the second argument of the \code{.onLoad} function) that wishes to depend on this package.}
     \item{snippet}{A character vector providing Scala code that will be evaluated when the interpreter in the package namespace is first used.}
     \item{classpath.prepend}{A character vector giving the full path to JAR files to add to the \emph{beginning} of the classpath for the Scala compiler/interpreter embedded within a package via the \code{\link{.rscalaPackage}} function.  The JAR files in the package's \sQuote{java} directory are already included and do not need to be added here.}
     \item{classpath.append}{A character vector giving the full path to JAR files to add to the \emph{end} of the classpath for the Scala compiler/interpreter embedded within a package via the \code{\link{.rscalaPackage}} function.  The JAR files in the package's \sQuote{java} directory are already included and do not need to be added here.}
     \item{...}{These arguments are passed by the \code{\link{.rscalaPackage}} function to the \code{\link{scala}} function.}
-    \item{expression}{(\code{\link{.rscalaDelay}} is deprecated.)  An expression that will be evaluated when the \code{\link{.rscalaPackage}} function runs.}.
 }
 \value{
     \code{\link{scala}} returns an \R object representing an embedded Scala interpreter.
@@ -174,7 +171,7 @@ drawGaussian <- function(mean=0.0, sd=1.0, rng=scalaNull("scala.util.Random")) s
   mean+sd*rng.nextDouble
 '
 drawGaussian(3,0.1,rng)  # No scalar protection or casting is needed.
-n.draws <- 100
+n.draws <- 100L
 s$random <- rng
 system.time({
   draws <- s \%~\% '
@@ -187,7 +184,7 @@ system.time({
   '
   acf(draws,plot=FALSE)
 })
-sampler <- function(nDraws=1L, rho=0.0, rng=scalaNull("scala.util.Random")) s \%!\% '
+sampler <- function(nDraws, rho=0.0, rng=scalaNull("scala.util.Random")) s \%!\% '
   val result = new Array[Double](nDraws)
   result(0) = rng.nextGaussian
   for ( i <- 1 until nDraws ) {
