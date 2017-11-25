@@ -49,7 +49,7 @@
 
 %% almost as usual
 \author{David B.\ Dahl\\Brigham Young University}
-\title{\textit{\Large Under Review\\\footnotesize Software Version: 2.4.0,\ \ Document ID: 2017-09-27}\\\vspace{5ex} Integration of \R and \Scala Using \rscala}
+\title{\textit{\Large Under Review\\\footnotesize Software Version: 2.5.0,\ \ Document ID: 2017-11-24}\\\vspace{5ex} Integration of \R and \Scala Using \rscala}
 
 %% for pretty printing and a nice hypersummary also set:
 \Plainauthor{David B. Dahl} %% comma-separated
@@ -276,7 +276,7 @@ and can be installed by executing the following \R expression.
 install.packages('rscala')
 @
 
-The \rscala package requires a \Scala installation in the 2.10.x, 2.11.x, or
+The \rscala package requires a \Scala installation in the 2.11.x or
 2.12.x series.  A convenience function, \code{rscala::scalaInstall()}, is
 provided to download and install \Scala in the user's home directory under the
 \code{.rscala} directory. Because this is a user-level installation,
@@ -300,15 +300,17 @@ library('rscala')
 Create a \Scala instance using the \code{scala} function:
 
 <<instantiateInterpreter,eval=FALSE>>=
-s <- scala()
+scala()
 @
 
 <<instantiateInterpreterHidden,eval=TRUE,include=FALSE>>=
 set.seed(2234)
-s <- scala(serialize.output=TRUE)
+scala(serialize.output=TRUE)
 s %@% 'scala.util.Random.setSeed(3242)'
 @
 
+This implicitly makes the interpreter instance \code{s} available in the current
+environment.  (The name can be customized with the \code{assign.name} option of the \code{scala} function.)
 Information on the \Scala instance \code{s} is available using
 
 <<scalaInfo,eval=FALSE>>=
@@ -324,8 +326,12 @@ scalaInfo(verbose=TRUE)
 
 The \code{scala} function includes parameters to specify which \Scala
 installation to use, the class path, whether matrices are in row-major or
-column-major order, and several other settings. Details on this and all other
-functions are provided in the \R documentation for the package (e.g.,
+column-major order, and several other settings.  The functions \code{scala2}
+and \code{scala3} are equivalent to \code{scala} except they change the \code{mode}
+option to customize how the bridge between \Scala and \R is established.
+Interactive users may notice that the \code{scala} function feels faster because
+it starts \Scala in the background.  Details on this and all
+other functions are provided in the \R documentation for the package (e.g.,
 \code{help(scala)}).
 
 A \Scala session is only valid during the \R session in which it is created and
@@ -601,6 +607,12 @@ instance of \code{scala.util.Random} is access as
 rng$self()
 @
 
+If there are no arguments when calling a method of a \Scala reference, the
+empty parentheses are excluded in the generated \Scala code.  These empty
+parentheses are needed, however, when one intends to use the methods default
+arguments.  In that class, use \code{.PARENTHESES=TRUE} when calling the
+method.
+
 \subsubsection{Calling methods of singleton objects}
 
 In contrast to \Java, \Scala classes do not have static variables or methods.
@@ -859,34 +871,39 @@ cpuFirstEval <- system.time(
 cat(paste(strsplit(bigNumber, "(?<=.{80})", perl = TRUE)[[1]], collapse="\n"), "\n")
 @
 
-Taking a closer look at the definition of the \code{bell.version2} function,
-notice that the last expression in the function is \code{s \%!\% '...'}, where
-\code{s} is the \Scala instance and \code{'...'} represents the multiline
-\Scala snippet.  The effect of the \code{\%!\%} operator is two-fold: i.~it
-automatically makes the arguments of the enclosing function (namely, \code{n}
-and \code{format}) available in the \Scala snippet, and ii.~it caches the
-on-the-fly compilation of the \Scala snippet to substantially improve speed for
-subsequent calls to \code{bell.version2}.  The \code{\%!\%} operator returns a
-copyable type or a \Scala reference if the result is not a copyable type.  The
-\code{\%.!\%} operator is identical except that it always returns a \Scala
-reference.
+Take a closer look at the definition of the \code{bell.version2} function.  We
+call this a \Scala function because it contains \code{s \%!\% '...'}, where
+\code{s} is a \Scala instance and \code{'...'} represents a \Scala snippet.
+The effect of the \code{\%!\%} operator is two-fold: i.~it automatically makes
+the arguments of the enclosing function (namely, \code{n} and \code{format})
+available in the \Scala snippet, although this can be customized with the
+\code{[} operator (as explained below), and ii.~it caches the on-the-fly
+compilation of the \Scala snippet to substantially improve speed for repeated
+calls.  The \code{\%!\%} operator returns a copyable type or, if the result is
+not a copyable type, a \Scala reference.  The \code{\%.!\%} operator is
+identical except that it always returns a \Scala reference.
 
 The consumer of a \Scala function does not need to know that the implementation
 is written in \Scala, but the programmer of a \Scala function should bear in
-mind a few items.  If an argument to a \Scala function is not a copyable
-type or a \Scala references, it will become a \code{EphemeralReference} object that
-can still be used in \R code executed by the \Scala function.  (This functionality is
-demonstrated later.)  If an argument
-is not needed in the \Scala implementation (because, for example, it has
-already been processed in the \R code), the conversion can be avoided by
-deleting the object with \R's \code{rm} function before the \code{s \%!\%
-'...'} snippet.  The automatically generated \Scala code for the conversion of
-arguments can be displayed (for debugging purposes) by setting the
-\code{show.header} option, e.g., \code{scalaSettings(s, show.header=TRUE)}.
-The \code{scalaNull} function can be used to pass a null reference of a particular
-type.  For example, an argument to a \Scala function might be \code{rng =
-scalaNull("scala.util.Random")}, indicating a null reference to
-\code{scala.util.Random}.
+mind a few items.  If an argument to a \Scala function is not a copyable type
+or a \Scala references, it will become a \code{EphemeralReference} object that
+can still be used in \R code executed by the \Scala function.  (This
+functionality is demonstrated later.) The \code{scalaNull} function can be used
+to pass a null reference of a particular type.  For example, an argument to a
+\Scala function might be \code{rng = scalaNull("scala.util.Random")},
+indicating a null reference to \code{scala.util.Random}.
+
+Additional variables in the local environment can be automatically serialized
+to \Scala by listing them after the \code{[} operator of the \Scala instance.
+Conversely, if an argument is not needed in the \Scala implementation (because,
+for example, it has already been processed in the \R code), the serialization
+can be avoided by using the \code{drop} argument of the \code{[} operator.  So,
+for example, we can make available new variables \code{x}, \code{y}, and
+\code{z} and skip variables \code{a} and \code{b} using
+\code{s["x","y","z",drop=c("a","b")] \%!\% '...'}.  The automatically generated
+\Scala code for the conversion of variables can be displayed (for debugging
+purposes) by setting the \code{show.snippet} option, e.g.,
+\code{scalaSettings(s, show.snippet=TRUE)}.
 
 \subsection[Callbacks into R from embedded Scala]{Callbacks into \R from embedded \Scala}
 
@@ -968,9 +985,14 @@ s %~% '
 The example above demonstrates the use of \Scala's builtin notation for
 creating pairs (e.g., \code{"sd" -> 3}) to provide named arguments to the \R
 function invoked from \Scala.  The arguments to an \code{invoke} method can be
-copyable types, \Scala references, and \code{EphemeralReference}
-objects, the last being automatically generated in \Scala functions for all arguments that are
-wrapped by the \code{II} function or that are not copyable types and not \Scala references.
+copyable types, \Scala references, and \code{EphemeralReference} objects, the
+last being automatically generated in \Scala functions for all arguments that
+are wrapped by the \code{II} function or that are not copyable types and not
+\Scala references.  Note that a \code{EphemeralReference} object is only valid
+within the \Scala function in which it is defined.  It can, however, be made
+valid beyond the \Scala function by converting it to a
+\code{PersistentReference} using \code{R.getReference(x)}, where \code{x} is a
+\code{EphemeralReference} object.
 
 A more interesting use case is calling a user-supplied \R function from \Scala.
 First, consider an \R function that computes $f(n,\alpha)$, the expectation of
@@ -1066,8 +1088,9 @@ Here we wish to highlight performance characteristics of \rscala itself.
 
 Every \Scala snippet associated with the \code{\%@\%}, \code{\%\mytilde\%}, and
 \code{\%.\mytilde\%} operators is compiled at every invocation.  In contrast, a
-\Scala snippet in a \Scala function (see Section \ref{inline}) is only compiled
-the first time the function is run.  Subsequent invocations are faster because
+\Scala snippet in a \Scala function (see Section \ref{inline})
+and methods of Scala references are only compiled
+the first time they are run.  Subsequent invocations are faster because
 the compiled code is cached and re-used.  Recall that in Section \ref{inline}
 the variable \code{cpuFirstEval} saved the system time associated with the
 first invocation of the \Scala function \code{bell.version2}.
@@ -1140,11 +1163,11 @@ if ( suppressWarnings(require('microbenchmark', quietly=TRUE)) ) {
 library(xtable)
 units <- attr(timings,"unit")
 reps <- timings[1,"neval"]
-timings <- cbind(timings[,c("expr")],c("rJava","rscala"),timings[,c("lq","mean","median","uq")])
+timings <- cbind(timings[,c("expr")],c("rJava","rscala","rJava","rscala"),timings[,c("lq","mean","median","uq")])
 colnames(timings) <- c("Expression","Package","Q1","Mean","Median","Q3")
 xtab <- xtable(timings, label="overhead")
 caption(xtab) <- paste0("Comparison of execution time of various ways to call the \\code{nextGaussian} method of an instance of the \\code{scala.util.Random} class.  Since the method itself is relatively fast, the timings here are an indication of the overhead involved with the various techniques.  Each expression was evaluated ",reps," times and the results are in ",units,".")
-print(xtab,include.rownames=FALSE,booktabs=TRUE)
+print(xtab,include.rownames=FALSE,booktabs=TRUE,table.placement="t")
 @
 
 The results in Table \ref{overhead} indicate that \rJava's \code{.jcall}
@@ -1176,17 +1199,18 @@ the package's name.  The \code{onLoad} function may be as simple as
 @
 
 The \code{.rscalaPackage} function binds a \Scala instance to the identifier
-\code{s} in the package's namespace using \R's \code{delayedAssign} function.
-This ensures that the start-up cost of instantiating a \Scala instance is only
-incurred when \code{s} is first used.  At that time, if \Scala itself is not
+\code{s} in the package's namespace using the \code{scala} function.
+The default for the \code{mode} argument is \code{"parallel"}.
+This instantiates a \Scala interpreter in the background and therefore has minimal delay
+when the interpreter \code{s} is first used.  If, however, \Scala itself is not
 already installed, the user is asked for permission to download and install
 \Scala (using the \code{scalaInstall} function).  Analogous to \rJava's
 \code{.jpackage} function, the \code{.rscalaPackage} function adds the JAR
 files in the source package's \code{inst/java} directory to \Scala's classpath.
 Since \Scala is binary-compatible only within major releases, package
-developers are encouraged to cross-compile for releases 2.10, 2.11, and 2.12
-and to place compatible \Scala JAR files in \code{inst/java/scala-2.10},
-\code{inst/java/scala-2.11}, and \code{inst/java/scala-2.12}, respectively.  If
+developers are encouraged to cross-compile for releases 2.11 and 2.12
+and to place compatible \Scala JAR files in 
+\code{inst/java/scala-2.11} and \code{inst/java/scala-2.12}, respectively.  If
 a package supports only specific major releases of \Scala, change the
 \code{major.release} argument of the \code{.rscalaPackage} function.
 
@@ -1209,8 +1233,13 @@ on \R's random number seed.
 <<onLoad2, eval=FALSE>>=
 .onLoad <- function(libname, pkgname) {
   snippet <- '
-    import org.ddahl.shallot._
     import org.apache.commons.math3.random.{ RandomDataGenerator => RDG }
+    import org.ddahl.shallot._
+    import parameter._
+    import parameter.decay._
+    import parameter.partition._
+    import distribution._
+    import mcmc._
 
     def rdg() = {
       val ints = R.evalI1("runif(2,-.Machine$integer.max,.Machine$integer.max)")
@@ -1219,14 +1248,14 @@ on \R's random number seed.
       r.reSeed(seed)
       r
     }
+
+    // This circumvents a bug in the class loader on some versions of Scala/JVM.
+    scala.util.Try {
+      new org.apache.commons.math3.random.EmpiricalDistribution()
+    }
   '
   ## Users may want to use 'options(rscala.heap.maximum="2G")'.
   .rscalaPackage(pkgname,classpath.packages="commonsMath",snippet=snippet)
-  ## This circumvents a bug in the class loader of Scala 2.11.x.
-  sInfo <- scalaInfo()
-  if ( ( ! is.null(sInfo) ) && ( sInfo$major.release == "2.11" ) ) {
-    s$.org.apache.commons.math3.random.EmpiricalDistribution$new()
-  }
 }
 @
 
@@ -1299,7 +1328,7 @@ application, simply add the following line to SBT's \code{build.sbt} file.
 % features and provides familiar Javadoc to \Java developers.
 
 <<sbt, engine="scala",eval=FALSE>>=
-libraryDependencies += "org.ddahl" %% "rscala" % "2.4.0"
+libraryDependencies += "org.ddahl" %% "rscala" % "2.5.0"
 @
 
 Note that, since the necessary \R code is bundled in the JAR file, the \rscala
@@ -1545,12 +1574,11 @@ over the TCP/IP bridge.
 % \label{mcmcSimulated}
 % \end{table}
 
-\clearpage
 \section[Case study: Simulation study accelerated with rscala]{Case study: Simulation study accelerated with \rscala}
 \label{bootstrap}
 
 While the previously mentioned \pkg{shallot} and \pkg{bamboo} packages demonstrate the
-ability to develop packages based on \rscala, we demonstrate in this section
+ability to develop packages based on \rscala, we now demonstrate 
 the ease with which computationally-intensive statistical procedures can be
 implemented by embedding \Scala code in an \R script.  The algorithm is
 embarrassingly parallel and we consider two means of parallelization: one using

@@ -34,11 +34,11 @@ knit_hooks$set(source = function(x, options) {
 library('rscala')
 
 ## ----instantiateInterpreter,eval=FALSE--------------------------------------------------
-#  s <- scala()
+#  scala()
 
 ## ----instantiateInterpreterHidden,eval=TRUE,include=FALSE-------------------------------
 set.seed(2234)
-s <- scala(serialize.output=TRUE)
+scala(serialize.output=TRUE)
 s %@% 'scala.util.Random.setSeed(3242)'
 
 ## ----scalaInfo,eval=FALSE---------------------------------------------------------------
@@ -316,11 +316,11 @@ if ( suppressWarnings(require('microbenchmark', quietly=TRUE)) ) {
 library(xtable)
 units <- attr(timings,"unit")
 reps <- timings[1,"neval"]
-timings <- cbind(timings[,c("expr")],c("rJava","rscala"),timings[,c("lq","mean","median","uq")])
+timings <- cbind(timings[,c("expr")],c("rJava","rscala","rJava","rscala"),timings[,c("lq","mean","median","uq")])
 colnames(timings) <- c("Expression","Package","Q1","Mean","Median","Q3")
 xtab <- xtable(timings, label="overhead")
 caption(xtab) <- paste0("Comparison of execution time of various ways to call the \\code{nextGaussian} method of an instance of the \\code{scala.util.Random} class.  Since the method itself is relatively fast, the timings here are an indication of the overhead involved with the various techniques.  Each expression was evaluated ",reps," times and the results are in ",units,".")
-print(xtab,include.rownames=FALSE,booktabs=TRUE)
+print(xtab,include.rownames=FALSE,booktabs=TRUE,table.placement="t")
 
 ## ----onLoad, eval=FALSE-----------------------------------------------------------------
 #  .onLoad <- function(libname, pkgname) {
@@ -330,8 +330,13 @@ print(xtab,include.rownames=FALSE,booktabs=TRUE)
 ## ----onLoad2, eval=FALSE----------------------------------------------------------------
 #  .onLoad <- function(libname, pkgname) {
 #    snippet <- '
-#      import org.ddahl.shallot._
 #      import org.apache.commons.math3.random.{ RandomDataGenerator => RDG }
+#      import org.ddahl.shallot._
+#      import parameter._
+#      import parameter.decay._
+#      import parameter.partition._
+#      import distribution._
+#      import mcmc._
 #  
 #      def rdg() = {
 #        val ints = R.evalI1("runif(2,-.Machine$integer.max,.Machine$integer.max)")
@@ -340,14 +345,14 @@ print(xtab,include.rownames=FALSE,booktabs=TRUE)
 #        r.reSeed(seed)
 #        r
 #      }
+#  
+#      // This circumvents a bug in the class loader on some versions of Scala/JVM.
+#      scala.util.Try {
+#        new org.apache.commons.math3.random.EmpiricalDistribution()
+#      }
 #    '
 #    ## Users may want to use 'options(rscala.heap.maximum="2G")'.
 #    .rscalaPackage(pkgname,classpath.packages="commonsMath",snippet=snippet)
-#    ## This circumvents a bug in the class loader of Scala 2.11.x.
-#    sInfo <- scalaInfo()
-#    if ( ( ! is.null(sInfo) ) && ( sInfo$major.release == "2.11" ) ) {
-#      s$.org.apache.commons.math3.random.EmpiricalDistribution$new()
-#    }
 #  }
 
 ## ----onUnload, eval=FALSE---------------------------------------------------------------
