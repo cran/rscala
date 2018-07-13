@@ -98,12 +98,17 @@ scala <- function(packages=character(),
   assign("closed",FALSE,envir=details)
   assign("connected",FALSE,envir=details) 
   assign("interrupted",FALSE,envir=details)
+  transcompileHeader <- c("import org.ddahl.rscala.Transcompile._","import scala.util.control.Breaks", unlist(lapply(packages,transcompileHeaderOfPackage)))
+  assign("transcompileHeader",transcompileHeader,envir=details)
+  assign("transcompileSubstitute",unlist(lapply(packages,transcompileSubstituteOfPackage)),envir=details)
+  assign("debugTranscompilation",FALSE,envir=details)
   assign("debug",debug,envir=details)
   assign("serializeOutput",serialize.output,envir=details)
   assign("last",NULL,envir=details)
   assign("garbage",integer(),envir=details)
   assign("scalaInfo",sInfo,envir=details)
   assign("heapMaximum",heap.maximum,envir=details)
+  assign("JARs",character(0),envir=details)
   gcFunction <- function(e) {
     garbage <- details[["garbage"]]
     garbage[length(garbage)+1] <- e[["id"]]
@@ -165,11 +170,24 @@ newSockets <- function(portsFilename, details, JARs) {
 }
 
 jarsOfPackage <- function(pkgname, major.release) {
-  jarsMajor <- list.files(file.path(system.file("java",package=pkgname),paste0("scala-",major.release)),pattern=".*\\.jar$",full.names=TRUE,recursive=FALSE)
-  jarsAny <- list.files(system.file("java",package=pkgname),pattern=".*\\.jar$",full.names=TRUE,recursive=FALSE)
+  dir <- if ( file.exists(system.file("inst",package=pkgname)) ) file.path("inst/java") else "java"
+  jarsMajor <- list.files(file.path(system.file(dir,package=pkgname),paste0("scala-",major.release)),pattern=".*\\.jar$",full.names=TRUE,recursive=FALSE)
+  jarsAny <- list.files(system.file(dir,package=pkgname),pattern=".*\\.jar$",full.names=TRUE,recursive=FALSE)
   result <- c(jarsMajor,jarsAny)
   if ( length(result) == 0 ) stop(paste0("JAR files of package '",pkgname,"' for Scala ",major.release," were requested, but no JARs were found."))
   result
+}
+
+#' @importFrom utils getFromNamespace
+#' 
+transcompileHeaderOfPackage <- function(pkgname) {
+  tryCatch( getFromNamespace("rscalaTranscompileHeader", pkgname), error=function(e) NULL )
+}
+
+#' @importFrom utils getFromNamespace
+#' 
+transcompileSubstituteOfPackage <- function(pkgname) {
+  tryCatch( getFromNamespace("rscalaTranscompileSubstitute", pkgname), error=function(e) NULL )
 }
 
 getHeapMaximum <- function(heap.maximum) {

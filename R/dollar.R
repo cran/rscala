@@ -5,16 +5,16 @@
   details <- attr(bridge,"details")
   structure(function(...) {
     scalaInvoke(details, snippet, list(...))
-  },class="rscalaFunction")
+  },class="rscalaStub")
 }
 
 #' @export
 #' 
 "$.rscalaReference" <- function(reference, snippet) {
-  details <- reference[["details"]]
+  details <- attr(reference,"rscalaReferenceEnvironment")[["details"]]
   structure(function(...) {
     scalaInvoke(details, snippet, list(...,reference), withReference=TRUE)
-  },class="rscalaFunction")
+  },class="rscalaStub")
 }
 
 #' @export
@@ -22,9 +22,11 @@
 "$<-.rscalaBridge" <- function(bridge, snippet, value) {
   details <- attr(bridge,"details")
   if ( snippet == "showCode" ) {
-    bridge(x=as.logical(value[1])) * "conduit.showCode = x"
+    bridge(x=as.logical(value[1])) ^ "conduit.showCode = x"
+  } else if ( snippet == "debugTranscompilation" ) {
+    assign("debugTranscompilation",identical(value,TRUE),envir=details)
   } else if ( snippet == "debug" ) {
-    bridge(x=as.logical(value[1])) * "conduit.debug = x"
+    bridge(x=as.logical(value[1])) ^ "conduit.debug = x"
   } else stop(paste0("Unsupported option: ", snippet))
   bridge
 }
