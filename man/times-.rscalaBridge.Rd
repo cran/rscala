@@ -17,17 +17,17 @@ Returns a vector or matrix of \R's basic types (if possible) or an
 }
 \description{
 This operator compiles and executes a snippet of Scala code.  All definitions
-are \emph{local} to Scala snippet itself.  Subsequent uses of the same code
+are \emph{local} to the supplied Scala snippet.  Subsequent uses of the same code
 snippet skips the time-consuming compilation step.  The return value is a
 vector or matrix of \R's basic types (if possible) or an rscala reference
 (otherwise).
 }
 \examples{
 \donttest{
-scala(assign.name='e')      # Implicitly defines the bridge 'e'.
-e * 'scala.util.Random.nextDouble() <= 0.75'
-e(mean=10, sd=2.5) * 'mean + sd * scala.util.Random.nextGaussian()'
-close(e)
+s <- scala()
+s * 'scala.util.Random.nextDouble() <= 0.75'
+s(mean=10, sd=2.5) * 'mean + sd * scala.util.Random.nextGaussian()'
+close(s)
 }
 
 }

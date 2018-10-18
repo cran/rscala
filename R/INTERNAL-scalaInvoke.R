@@ -1,4 +1,5 @@
-scalaInvoke <- function(details, snippet, args, withNames=FALSE, withReference=FALSE, transcompileInfo=NULL) {
+scalaInvoke <- function(details, snippet, args, envir, withNames=FALSE, withReference=FALSE, transcompileInfo=NULL) {
+  if ( details[["disconnected"]] ) scalaConnect(details)
   scalaLastEngine(details)
   if ( details[["interrupted"]] ) return(invisible())
   socketOut <- details[["socketOut"]]
@@ -26,7 +27,8 @@ scalaInvoke <- function(details, snippet, args, withNames=FALSE, withReference=F
     if ( withNames ) wb(socketOut,PCODE_INVOKE_FREEFORM)
     else wb(socketOut,PCODE_INVOKE)
   }
-  wb(socketOut,length(args))
+  len <- if ( is.null(args) ) -1L else length(args)
+  wb(socketOut,len)
   wc(socketOut,snippet)
-  pop(details, transcompileInfo)
+  pop(details, transcompileInfo, envir)
 }

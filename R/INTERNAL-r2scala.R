@@ -1,4 +1,4 @@
-r2scala <- function(x, showCode, symbolEnv,substituteList) {
+r2scala <- function(x, showCode, symbolEnv, substituteList) {
   if ( length(x) == 0 ) return("")
   typeof  <- sapply(x,function(y) typeof(y))
   classes <- sapply(x,function(y) class(y))
@@ -8,6 +8,7 @@ r2scala <- function(x, showCode, symbolEnv,substituteList) {
     print(typeof)
     print(classes)
     print(strings)
+    print(names(strings))
     cat(">>\n")
   }
   if ( ( typeof[1] == "symbol" ) && ( classes[1] == "name" ) ) {
@@ -24,14 +25,14 @@ r2scala <- function(x, showCode, symbolEnv,substituteList) {
     }
     else if ( strings[1] == "scalaType" ) {
       if ( length(x) != 2 ) stop('scalaType statement only take one argument.')
-      returnType <- eval(x[[2]])
+      returnType <- toString(scalaType(eval(x[[2]])))
       assign("_returnType",returnType,envir=symbolEnv,substituteList)
       paste0("// Return type is declared to be ",returnType)
     }
     else if ( strings[1] == "break" ) "Outer.break"
     else if ( strings[1] == "next" ) "Inner.break"
     else if ( strings[1] == "{" )  paste0("{\n",paste0(sapply(x[-1],r2scala,showCode,symbolEnv,substituteList),collapse="\n"),"\n}")
-    else if ( strings[1] == "[" )  paste0(r2scala(x[[2]],showCode,symbolEnv,substituteList),"(_ensureArray(",r2scala(x[[3]],showCode,symbolEnv,substituteList),"))")
+    else if ( strings[1] == "[" )  paste0(r2scala(x[[2]],showCode,symbolEnv,substituteList),"(_mkIndex(",r2scala(x[[3]],showCode,symbolEnv,substituteList),"))")
     else if ( strings[1] == "^" )  paste0(transcompileSubstitute("pow",substituteList),   "(",r2scala(x[[2]],showCode,symbolEnv,substituteList),",",r2scala(x[[3]],showCode,symbolEnv,substituteList),")")
     else if ( strings[1] == "==" ) paste0(transcompileSubstitute("equal",substituteList), "(",r2scala(x[[2]],showCode,symbolEnv,substituteList),",",r2scala(x[[3]],showCode,symbolEnv,substituteList),")")
     else if ( strings[1] == "!=" ) paste0(transcompileSubstitute("notequal",substituteList), "(",r2scala(x[[2]],showCode,symbolEnv,substituteList),",",r2scala(x[[3]],showCode,symbolEnv,substituteList),")")
@@ -74,20 +75,28 @@ r2scala <- function(x, showCode, symbolEnv,substituteList) {
     else if ( strings[1] == "for" ) {
       paste0('val Outer = new Breaks; val Inner = new Breaks; Outer.breakable { for ( ',r2scala(x[[2]],showCode,symbolEnv,substituteList),' <- ',r2scala(x[[3]],showCode,symbolEnv,substituteList),' ) Inner.breakable{ ',r2scala(x[[4]],showCode,symbolEnv,substituteList),' } }')
     }
-    else paste0(transcompileSubstitute(strings[1],substituteList),"(",paste0(sapply(x[-1],r2scala,showCode,symbolEnv,substituteList),collapse=","),")")
+    else {
+      args <- paste0(sapply(x[-1],r2scala,showCode,symbolEnv,substituteList))
+      names <- if ( is.null(names(strings)) ) NULL else paste0(sapply(names(strings)[-1],function(n) {
+        if ( n == "" ) "" else paste0(gsub("\\W","_",n),"=")
+      }))
+      args <- paste0(names,args,collapse=",")
+      paste0(transcompileSubstitute(strings[1],substituteList),"(",args,")")
+    }
   }
   else if ( typeof[1] == "integer" ) paste0("{",strings[1],":Int}")
   else if ( typeof[1] == "double" ) paste0("{",strings[1],":Double}")
   else if ( typeof[1] == "logical" ) if (x[[1]]) "true" else "false"
   else if ( typeof[1] == "character" ) paste0('"""',strings[1],'"""')
-  else stop("33")
+  else stop("Unsupported syntax.")
 }
 
 transcompileSubstitute <- function(x, substituteList) {
   if ( x %in% c("numeric","double","integer","logical","character","subset","which","equal","notequal",
-                "lt","le","gt","ge","and","or","abs","sqrt","log","log10","exp","pow","c","length",
-                "all","any","sum","mean","var","sd","max","min","cat","paste","paste0","nchar","rep",
-                "seq","seqWithLength","seq_along","seq_len","ceiling","floor","round","random") ) paste0("_",x)
+                "lt","le","gt","ge","order","sort","and","or","abs","sqrt","log","log10","exp","pow","c","length",
+                "all","any","prod","sum","mean","var","sd","max","min","cat","paste","paste0","nchar","rep",
+                "seq","seqWithLength","seq_along","seq_len","ceiling","floor","round","random",
+                "stop","warning") ) paste0("_",x)
   else if ( x %in% c("as.numeric","as.double","as.integer","as.logical","as.character") ) paste0("_",gsub("\\.","DOT",x))
   else {
     y <- NULL

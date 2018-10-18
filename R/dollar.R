@@ -4,16 +4,18 @@
   if ( ! is.function(bridge) ) stop("When defining an rscala function, parameter lists are not supported.")
   details <- attr(bridge,"details")
   structure(function(...) {
-    scalaInvoke(details, snippet, list(...))
+    scalaInvoke(details, snippet, list(...), parent.frame(1))
   },class="rscalaStub")
 }
 
 #' @export
 #' 
 "$.rscalaReference" <- function(reference, snippet) {
-  details <- attr(reference,"rscalaReferenceEnvironment")[["details"]]
+  rre <- attr(reference,"rscalaReferenceEnvironment")
+  details <- rre[["details"]]
+  envir <- rre[["envir"]]
   structure(function(...) {
-    scalaInvoke(details, snippet, list(...,reference), withReference=TRUE)
+    scalaInvoke(details, snippet, list(...,reference), envir, withReference=TRUE)
   },class="rscalaStub")
 }
 

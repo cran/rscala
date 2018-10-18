@@ -1,6 +1,6 @@
-context("serialization")
+context("output-serialization")
 
-# skip("serialization")
+# skip("output-serialization")
 
 test_that("serialization captures output", {
   expect_silent(s2 * 'print("Hi")')

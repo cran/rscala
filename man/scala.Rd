@@ -2,32 +2,17 @@
 % Please edit documentation in R/scala.R
 \name{scala}
 \alias{scala}
+\alias{rscala-package}
 \title{Instantiate a Scala Bridge}
 \usage{
-scala(packages = character(), assign.callback = function(s) { },
-  assign.name = "s", JARs = character(),
-  serialize.output = .Platform$OS.type == "windows", stdout = TRUE,
-  stderr = TRUE, port = 0L, heap.maximum = NULL,
-  assign.env = parent.frame(), debug = FALSE)
+scala(JARs = character(), serialize.output = .Platform$OS.type ==
+  "windows", stdout = TRUE, stderr = TRUE, port = 0L,
+  heap.maximum = NULL, debug = FALSE)
 }
 \arguments{
-\item{packages}{Character vector of package names whose embedded JAR files
-are to be added to the classpath.}
-
-\item{assign.callback}{A function taking a Scala bridge as its only argument.
-This function is called immediately after the bridge is connected, which
-does not happen until the bridge is actually used and may be long after
-this function finishes. This is where setup code goes, like \emph{global}
-imports, objects, classes, methods, etc.  For example, it might equal
-\code{function(s) { s + 'import scala.util.Random' }}.  \strong{Note} the
-use of the execution operator \code{+} instead of the evaluation operator
-\code{*}.}
-
-\item{assign.name}{The name of the (promise of the) bridge to be assigned in
-the environment given by the \code{assign.env} argument.}
-
-\item{JARs}{Character vector whose elements are individual JAR files to be
-added to the runtime classpath.}
+\item{JARs}{Character vector whose elements are some combination of
+individual JAR files or package names which contain embedded JARs.  These
+JAR files are added to the runtime classpath.}
 
 \item{serialize.output}{Logical indicating whether Scala output should be
 serialized back to R.  This is slower and probably only needed on Windows.}
@@ -43,14 +28,10 @@ the output.}
 \item{port}{If \code{0}, two random ports are selected.  Otherwise,
 \code{port} and \code{port+1} are used to the TCP/IP connections.}
 
-\item{heap.maximum}{String indicating the JVM heap maximum, e.g., "8G".
-Without this being set in either \code{\link{scala}} or
-\code{\link{scalaHeapMaximum}}, the heap maximum will be 85\% of the
-physical RAM.  The value from \code{\link{scalaHeapMaximum}} supersedes
-that from \code{\link{scala}}.}
-
-\item{assign.env}{(Developer use only.) The environment in which the (promise
-of the) bridge is assigned.}
+\item{heap.maximum}{String giving Scala's heap maximum, e.g., "8G" or "512M".
+The value here supersedes that from \code{\link{scalaMemory}}. Without this
+being set in either \code{\link{scala}} or \code{\link{scalaMemory}}, the
+heap maximum will be 90\% of the available RAM.}
 
 \item{debug}{(Developer use only.)  Logical indicating whether debugging
 should be enabled.}
@@ -59,7 +40,10 @@ should be enabled.}
 Returns an rscala bridge.
 }
 \description{
-This function creates an instance of an rscala bridge.
+This function creates an instance of an rscala bridge.  Details on this
+function (and the rscala package as a whole) are provided in the package
+vignette and the associated paper in the \emph{Journal of Statistical
+Software}. See the reference below.
 }
 \details{
 Multiple interpreters can be created and each runs independently with its own
@@ -68,25 +52,25 @@ between \R and Scala is itself not thread-safe, so multiple \R threads/cores
 should not simultaneously access the same bridge.
 
 Terminate the bridge using \code{\link{close.rscalaBridge}}.
-
-Rather than calling this function explicitly, packages importing or depending
-on rscala should instead use the \code{\link{scalaPackage}} and
-\code{\link{scalaPackageUnload}} functions.
 }
 \examples{
 \donttest{
-scala(assign.name='e')      # Implicitly defines the bridge 'e'.
-rng <- e $ .new_scala.util.Random()
+s <- scala()
+rng <- s $ .new_scala.util.Random()
 rng $ alphanumeric() $ take(15L) $ mkString(',')
-e * '2+3'
-h <- e(x=2, y=3) ^ 'x+y'
+s * '2+3'
+h <- s(x=2, y=3) ^ 'x+y'
 h $ toString()
-e(mean=h, sd=2, r=rng) * 'mean + sd * r.nextGaussian()'
-close(e)
+s(mean=h, sd=2, r=rng) * 'mean + sd * r.nextGaussian()'
+close(s)
 }
 
 }
+\references{
+{David B. Dahl (2018). “Integration of R and Scala Using rscala.”
+  Journal of Statistical Software, in editing. https://www.jstatsoft.org}
+}
 \seealso{
-\code{\link{close.rscalaBridge}}, \code{\link{scalaPackage}},
-  \code{\link{scalaPackageUnload}}, \code{\link{scalaHeapMaximum}}
+\code{\link{close.rscalaBridge}}, \code{\link{scalaMemory}}
+  \code{\link{scalaPushRegister}}, \code{\link{scalaPullRegister}}
 }

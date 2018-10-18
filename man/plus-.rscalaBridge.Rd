@@ -2,7 +2,7 @@
 % Please edit documentation in R/ops.R
 \name{+.rscalaBridge}
 \alias{+.rscalaBridge}
-\title{Execution Operator}
+\title{Declaration Operator}
 \usage{
 \method{+}{rscalaBridge}(bridge, snippet)
 }
@@ -23,8 +23,8 @@ objects, classes, methods, etc.
 }
 \examples{
 \donttest{
-scala(assign.name='e')      # Implicitly defines the bridge 'e'.
-e + '
+s <- scala()
+s + '
   import scala.util.Random.nextInt
   import scala.math.{Pi, log, exp, sqrt}
   val const = -log(sqrt(2*Pi))
@@ -34,10 +34,10 @@ e + '
     if ( logScale ) result else exp(result)
   }
 '
-e $ const()
-e $ nextInt(100L)
-e $ dnorm(8, 10, 2, FALSE)
-close(e)
+s $ const()
+s $ nextInt(100L)
+s $ dnorm(8, 10, 2, FALSE)
+close(s)
 }
 
 }

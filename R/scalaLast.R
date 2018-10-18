@@ -5,21 +5,23 @@
 #' @param bridge An rscala bridge
 #'
 #' @export
+#' @seealso \code{\link{scalaFindBridge}}
+#' 
 #' @examples \donttest{
-#' scala(assign.name='e')      # Implicitly defines the bridge 'e'.
-#' e * "2+3"
-#' scalaLast(e)
-#' close(e)
+#' s <- scala()
+#' s * "2+3"
+#' scalaLast(s)
+#' close(s)
 #' }
 #' 
-scalaLast <- function(bridge) {
+scalaLast <- function(bridge=scalaFindBridge()) {
   details <- attr(bridge,"details")
   last <- scalaLastEngine(details)
   if ( details[["interrupted"]] ) invisible() else last
 }
 
 scalaLastEngine <- function(details) {
-  if ( details[["closed"]] ) stop("Bridge is closed.")
+  checkConnection(details)
   if ( details[["interrupted"]] ) {
     cat("<< waiting for previously interrupted computation to finish >>\n")
     assign("interrupted",FALSE,envir=details)

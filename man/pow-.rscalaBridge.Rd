@@ -22,19 +22,19 @@ rscala reference to an anonymous Scala function.
 }
 \examples{
 \donttest{
-scala(assign.name='e')              # Implicitly defines the bridge 'e'.
-x <- e ^ 'new scala.util.Random()'  # These two lines ...
-x <- e $ .new_scala.util.Random()   # ... are equivalent
-e(rng=x) * 'rng.nextDouble()'
-f <- e ^ function(x=scalaType('Double')) { pi - x }
+s <- scala()
+x <- s ^ 'new scala.util.Random()'  # These two lines ...
+x <- s $ .new_scala.util.Random()   # ... are equivalent
+s(rng=x) * 'rng.nextDouble()'
+f <- s ^ function(x=scalaType('Double')) { pi - x }
 f$apply(3.14)
-e(n=10L, mapper=e ^ function(x=scalaType("Int")) { 2 * x }) * "Array.tabulate(n)(mapper)"
-logStdNormalDensity <- e ^ function(x=scalaType("Double"), mean=0.0, sd=1.0) {
+s(n=10L, mapper=s ^ function(x=scalaType("Int")) { 2 * x }) * "Array.tabulate(n)(mapper)"
+logStdNormalDensity <- s ^ function(x=scalaType("Double"), mean=0.0, sd=1.0) {
   variance <- sd^2
   -0.5*log(2*pi*variance) - 0.5/variance * (x-mean)^2
 }
 identical(logStdNormalDensity$apply(1.0), dnorm(1.0, log=TRUE))
-close(e)
+close(s)
 }
 
 }
