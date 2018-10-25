@@ -1,7 +1,7 @@
-e03cf321b3f12dfa65e4cb299e1a7557 *DESCRIPTION
+a588e109b0e085b8b8b987c2c86193b0 *DESCRIPTION
 a04da2e06e99d0e0f8708659988914f1 *LICENSE
 d3f7654cd8e7149e10bf3eb1f6e08e3b *NAMESPACE
-65f25f9c03fbac580839a520b37b5a48 *NEWS
+a9457fe736d7b2f289b661ed223df91a *NEWS
 a4ed93451b32ed651506e4aa28a9c8c4 *R/INTERNAL-callback.R
 9c5fea24e8f7fcb7535579cdd1fdc29c *R/INTERNAL-checkConnection.R
 2f79283263394b8d325919ad1e34abe0 *R/INTERNAL-io.R
@@ -19,7 +19,7 @@ f57695154a5fd06bdd7c6ac3d60a0cef *R/is.scalaReference.R
 96716339c6a674ad5059b7c751e6613c *R/ops.R
 d46d9de9abe54bd630252f2bd7d85b8f *R/print.R
 92d48bb8c8caf2120373b596e86b2c53 *R/scala.R
-bd3a3ac377ca58001bb67b1011d9c30a *R/scalaConfig.R
+6cbc170d7a5d8ac95ce24b065b58b106 *R/scalaConfig.R
 f69e1904b9fe28a1a7271dfce3cf25d2 *R/scalaDisconnect.R
 11e4958daa90e7db34119693d89ba76a *R/scalaFindBridge.R
 3eb0eb63d7065dc330d75369c4fd5a1e *R/scalaJARs.R
@@ -29,7 +29,7 @@ d898cf9fad225b31218491d02ff33c1a *R/scalaMemory.R
 ebddc7f1f2267db72db9b18bda6780cb *R/scalaPull.R
 e0ab54510590a1ae0d9f5f8c3099c67f *R/scalaPush.R
 0233f18ef1a74ff6a20a841d94a3a421 *R/scalaPushRegister.R
-d556ba0ea3e182c399573bc323e9ed0a *R/scalaSBT.R
+06d6770181312201ff5f9bd17cd8b090 *R/scalaSBT.R
 69227cd19e6ae2e893336c09ac4c0df2 *R/scalaType.R
 39e5c8b9d009eb44e555da6965b096b3 *R/scalaVersionJARs.R
 783a325de377ccfc914bacc89b5f9f53 *build/vignette.rds
@@ -41,11 +41,11 @@ d7f97a8af3b729d8a87c1d646fdba0d1 *inst/CITATION
 4acd3fd959c0234b1a8b5e6587a1ab57 *inst/doc/bootstrap-coverage.R
 ac366e70a6c3138716f7f6fafd178115 *inst/doc/rscala.R
 6cce21c17ff131ff6fe45df1b41d7d8e *inst/doc/rscala.Rnw
-f76af46343e4f107159bc5d86284f25e *inst/doc/rscala.pdf
-9bddfa716fedad46e008d13f43f69287 *inst/java/scala-2.11/rscala_2.11-3.2.2.jar
-0440eacaa55ba464f3c87816eaece1ee *inst/java/scala-2.12/rscala_2.12-3.2.2.jar
-533b77cdb76a693f35f9f74754dc2b0b *inst/java/scala-2.13.0-M5/rscala_2.13.0-M5-3.2.2.jar
-9db27937f9cda29468e13e5809ff6d1d *java/rscala_2.12-3.2.2-sources.jar
+f836701df2836b064439b80bd082e4a2 *inst/doc/rscala.pdf
+825e67066973fabf5ed29341b51f5ae0 *inst/java/scala-2.11/rscala_2.11-3.2.3.jar
+1349d870465e99d75d71f786be023d06 *inst/java/scala-2.12/rscala_2.12-3.2.3.jar
+e39be9de9498753b539739ae781f9ecb *inst/java/scala-2.13.0-M5/rscala_2.13.0-M5-3.2.3.jar
+465f7a134faf939f67472b96f858fd11 *java/rscala_2.12-3.2.3-sources.jar
 e5a1d49c5de9bc89f0671992bbcff678 *man/close.rscalaBridge.Rd
 3830c72b9e98859890f52ead15593e4b *man/is.scalaReference.Rd
 b5a61b602526095f0b602ecef38e95d1 *man/plus-.rscalaBridge.Rd
