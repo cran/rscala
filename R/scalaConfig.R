@@ -10,7 +10,9 @@
 #'   rewritten based on a new search for Scala and Java.  If \code{FALSE}, the
 #'   previous configuration is sourced from the script
 #'   \code{~/.rscala/config.R}.  If \code{"live"}, a new search is performed,
-#'   but the results do not overwrite the previous configuration script.
+#'   but the results do not overwrite the previous configuration script.  Finally,
+#'   the value set here is superceded by the value of the environment variable
+#'   \code{RSCALA_RECONFIG}, if it exists.
 #' @param download A character vector which may be length-zero or whose elements
 #'   are any combination of \code{"java"}, \code{"scala"}, or \code{"sbt"}. Or,
 #'   \code{TRUE} denotes all three.  The indicated software will be installed at
@@ -33,6 +35,7 @@ scalaConfig <- function(verbose=TRUE, reconfig=FALSE, download=character(0), req
   download.java <- "java" %in% download
   download.scala <- "scala" %in% download
   download.sbt <- "sbt" %in% download
+  if ( Sys.getenv("RSCALA_RECONFIG") != "" ) reconfig <- Sys.getenv("RSCALA_RECONFIG")
   consent <- identical(reconfig,TRUE) || download.java || download.scala || download.sbt
   installPath <- file.path("~",".rscala")
   dependsPath <- if ( Sys.getenv("RSCALA_BUILDING") != "" ) file.path(getwd(),"inst","dependencies") else ""
@@ -47,7 +50,7 @@ scalaConfig <- function(verbose=TRUE, reconfig=FALSE, download=character(0), req
     } else FALSE
   }
   configPath  <- file.path(installPath,"config.R")
-  if ( !reconfig && file.exists(configPath) && !download.java && !download.scala && !download.sbt ) {
+  if ( identical(reconfig,FALSE) && file.exists(configPath) && !download.java && !download.scala && !download.sbt ) {
     if ( verbose ) cat(paste0("\nRead existing configuration file: ",configPath,"\n\n"))
     source(configPath,chdir=TRUE,local=TRUE)
     if ( is.null(config$format) || ( config$format < 3L ) || ( ! all(file.exists(c(config$javaHome,config$scalaHome,config$javaCmd,config$scalaCmd))) ) || ( is.null(config$sbtCmd) && require.sbt ) || ( ! is.null(config$sbtCmd) && ! file.exists(config$sbtCmd) ) ) {
@@ -308,8 +311,7 @@ installSBT <- function(installPath, javaConf, verbose, attempt=1) {
 
 javaSpecifics <- function(javaCmd,verbose) {
   if ( verbose ) cat("  ... querying Java specifics.\n")
-  javaCmd <- normalizePath(javaCmd, mustWork=FALSE)
-  response <- system2(javaCmd,"-version",stdout=TRUE,stderr=TRUE)
+  response <- system2(path.expand(javaCmd),"-version",stdout=TRUE,stderr=TRUE)
   # Get version information
   versionRegexp <- '(java|openjdk) version "([^"]*)".*'
   line <- response[grepl(versionRegexp,response)]
@@ -325,16 +327,16 @@ javaSpecifics <- function(javaCmd,verbose) {
   # Determine if 32 or 64 bit
   bit <- if ( any(grepl('^(Java HotSpot|OpenJDK).* 64-Bit (Server|Client) VM.*$',response)) ||
               any(grepl('^IBM .* amd64-64 .*$',response)) ) 64 else 32
-  list(javaCmd=javaCmd, javaMajorVersion=versionNumber, javaArchitecture=bit)
+  list(javaCmd=normalizePath(javaCmd,mustWork=FALSE), javaMajorVersion=versionNumber, javaArchitecture=bit)
 }
 
 setJavaEnv <- function(javaConf) {
-  oldJAVACMD <- Sys.getenv("JAVACMD")
-  oldJAVAHOME <- Sys.getenv("JAVA_HOME")
-  eJAVACMD <- if ( ! is.null(javaConf$javaCmd) && javaConf$javaCmd != "" ) javaConf$javaCmd else ""
-  eJAVAHOME <- if ( ! is.null(javaConf$javaHome) && javaConf$javaHome != "" ) javaConf$javaHome else ""
-  Sys.setenv(JAVACMD=eJAVACMD)
-  Sys.setenv(JAVA_HOME=eJAVAHOME)
+  oldJAVACMD <- Sys.getenv("JAVACMD",unset="--unset--")
+  oldJAVAHOME <- Sys.getenv("JAVA_HOME",unset="--unset--")
+  if ( oldJAVACMD  == "--unset--" ) oldJAVACMD  <- NULL
+  if ( oldJAVAHOME == "--unset--" ) oldJAVAHOME <- NULL
+  if ( is.null(javaConf$javaCmd)  ) Sys.unsetenv("JAVACMD")   else Sys.setenv(JAVACMD= javaConf$javaCmd)
+  if ( is.null(javaConf$javaHome) ) Sys.unsetenv("JAVA_HOME") else Sys.setenv(JAVAHOME=javaConf$javaHome)
   list(javaCmd=oldJAVACMD,javaHome=oldJAVAHOME)
 }
 

@@ -1,8 +1,8 @@
 Package: rscala
 Type: Package
 Title: Bridge Between 'R' and 'Scala' with Callbacks
-Version: 3.2.3
-Date: 2018-10-22
+Version: 3.2.4
+Date: 2018-11-05
 Authors@R: person(given="David B.",family="Dahl",role=c("aut","cre"),email="dahl@stat.byu.edu")
 URL: https://github.com/dbdahl/rscala
 BugReports: https://github.com/dbdahl/rscala/issues
@@ -16,8 +16,8 @@ Encoding: UTF-8
 RoxygenNote: 6.1.0
 Suggests: testthat
 NeedsCompilation: no
-Packaged: 2018-10-22 22:50:12 UTC; dahl
+Packaged: 2018-11-05 16:33:36 UTC; dahl
 Author: David B. Dahl [aut, cre]
 Maintainer: David B. Dahl <dahl@stat.byu.edu>
 Repository: CRAN
-Date/Publication: 2018-10-25 04:30:02 UTC
+Date/Publication: 2018-11-05 18:30:03 UTC

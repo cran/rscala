@@ -70,7 +70,7 @@ scala <- function(JARs=character(),
   if ( is.null(sConfig$error) ) {
     scalaMajor <- sConfig$scalaMajorVersion
     rscalaJAR <- shQuote(list.files(system.file(file.path("java",paste0("scala-",scalaMajor)),package="rscala",mustWork=FALSE),full.names=TRUE))
-    if ( rscalaJAR == "" ) {
+    if ( rscalaJAR[1] == "" ) {
       sConfig$error <- list(message=paste0("\n\n<<<<<<<<<<\n<<<<<<<<<<\n<<<<<<<<<<\n\nScala version ",sConfig$scalaFullVersion," is not among the support versions: ",paste(names(scalaVersionJARs()),collapse=", "),".\nPlease run 'rscala::scalaConfig(reconfig=TRUE)'\n\n>>>>>>>>>>\n>>>>>>>>>>\n>>>>>>>>>>\n"))
     } else {
       heap.maximum <- getHeapMaximum(heap.maximum,sConfig$javaArchitecture == 32)
@@ -89,7 +89,7 @@ scala <- function(JARs=character(),
   }
   assign("closed",FALSE,envir=details)
   assign("disconnected",TRUE,envir=details) 
-  assign("pid",Sys.getpid(),envir=details)
+  assign("pidOfR",Sys.getpid(),envir=details)
   assign("interrupted",FALSE,envir=details)
   transcompileHeader <- c("import org.ddahl.rscala.server.Transcompile._","import scala.util.control.Breaks")
   assign("transcompileHeader",transcompileHeader,envir=details)
@@ -169,7 +169,7 @@ scalaConnect <- function(details) {
       delay <- 0.01
       while ( TRUE ) {
         if ( file.exists(portsFilename) ) {
-          line <- scan(portsFilename,n=2,what=character(),quiet=TRUE)
+          line <- scan(portsFilename,n=3L,what=character(),quiet=TRUE)
           if ( length(line) > 0 ) return(as.numeric(line))
         }
         Sys.sleep(delay)
@@ -179,10 +179,11 @@ scalaConnect <- function(details) {
     rm("portsFilename",envir=details)
     assign("socketInPort",ports[1],envir=details)
     assign("socketOutPort",ports[2],envir=details) 
-    TRUE
-  } else FALSE
+    assign("pidOfScala",ports[3],envir=details) 
+  }
   socketIn  <- socketConnection(host="localhost", port=details[['socketInPort']],  server=FALSE, blocking=TRUE, open="rb", timeout=2678400L)
   socketOut <- socketConnection(host="localhost", port=details[['socketOutPort']], server=FALSE, blocking=TRUE, open="ab", timeout=2678400L)
+  attr(socketIn, "pidOfScala") <- details[['pidOfScala']]
   assign("socketIn",socketIn,envir=details)
   assign("socketOut",socketOut,envir=details)
   assign("disconnected",FALSE,envir=details)

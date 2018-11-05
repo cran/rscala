@@ -17,8 +17,8 @@ rbyte <- function(con) {
       TCODE_INTERRUPTED
     })
     if ( length(x) > 0 ) return(x)
-    if ( counter >= 100L ) stop("Connection isn't providing data.")
     counter <- counter + 1L
+    if ( ( counter %% 100L == 0L ) && ( scalaIsDead(con) ) ) stop("Scala seems to have died.")
   }
 }
 
@@ -35,8 +35,8 @@ rb <- function(con,v,n=1L) {
     else {
       counter <- 0L
       while ( length(r) != n ) {
-        if ( counter >= 100L ) stop("Connection isn't providing data.")
         counter <- counter + 1L
+        if ( ( counter %% 100L == 0L ) && ( scalaIsDead(con) ) ) stop("Scala seems to have died.")
         r <- c(r,readBin(con,v,n-length(r),endian="big"))
       }
       r
@@ -45,4 +45,15 @@ rb <- function(con,v,n=1L) {
     stop("The bridge is invalid.")
   })
 }
-  
+
+scalaIsDead <- function(con) {
+  pidOfScala <- attr(con,"pidOfScala")
+  if ( .Platform$OS.type == "unix" ) {
+    tryCatch(length(system2("ps",c("-o","pid=","-p",pidOfScala),stdout=TRUE)) == 0,
+             warning=function(e) TRUE, error=function(e) TRUE)
+  } else if ( .Platform$OS.type == "windows" ) {
+    tryCatch(length(system2("tasklist",c("/fo","csv","/fi",sprintf('"PID eq %s"',pidOfScala)),stdout=TRUE)) == 1,
+             warning=function(e) TRUE, error=function(e) TRUE)
+  } else stop("Unsupported OS.")
+}
+
