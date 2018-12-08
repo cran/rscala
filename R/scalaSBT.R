@@ -34,11 +34,35 @@ scalaSBT <- function(args=c("+package","packageSrc"), copy.to.package=TRUE) {
   sConfig <- scalaConfig(FALSE,require.sbt=TRUE)
   oldWD <- normalizePath(getwd(),mustWork=FALSE)
   on.exit(setwd(oldWD))
+  packageHome <- NULL
   while ( TRUE ) {
+    if ( file.exists("DESCRIPTION") ) packageHome <- getwd()
     if ( file.exists("build.sbt") ) break
     currentWD <- getwd()
     setwd("..")
     if ( currentWD == getwd() ) stop("Cannot find 'build.sbt' file.")
+  }
+  if ( all(grepl("^(\\+?assembly|\\+?package|\\+?packageSrc)$",args)) ) {
+    packageHome <- if ( ! is.null(packageHome) ) packageHome
+    else {
+      descriptionFile <- Sys.glob("*/DESCRIPTION")
+      if ( length(descriptionFile) == 1 ) normalizePath(dirname(descriptionFile))
+      else if ( length(descriptionFile) == 0 ) {
+        descriptionFile <- Sys.glob("*/*/DESCRIPTION")
+        if ( length(descriptionFile) == 1 ) normalizePath(dirname(descriptionFile))
+        else NULL
+      } else NULL
+    }
+    latest <- function(path,pattern=NULL) {
+      files <- list.files(path, pattern=pattern, recursive=TRUE, full.names=TRUE)
+      xx <- sapply(files, function(f) { file.info(f)$mtime })
+      if ( length(xx) == 0 ) -Inf else max(xx)
+    }
+    srcHome <- "src"
+    if ( file.exists(srcHome) && !is.null(packageHome) && file.exists(packageHome) && ( latest(srcHome) < latest(packageHome,'.*\\.jar') ) ) {
+      cat("[info] Latest Scala source is older that JARs.  There is no need to re-compile.\n")
+      return(invisible())
+    }
   }
   oldJavaEnv <- setJavaEnv(sConfig)
   status <- system2(path.expand(sConfig$sbtCmd),args)
@@ -66,7 +90,11 @@ scalaSBT <- function(args=c("+package","packageSrc"), copy.to.package=TRUE) {
       stop(stopMsg)
     }
     srcJARs <- paste0("scala-",scalaVersions,"/",tolower(name),"_",scalaVersions,"-",version,"-sources.jar")
-    binJARs <- paste0("scala-",scalaVersions,"/",tolower(name),"_",scalaVersions,"-",version,".jar")
+    if ( any(grepl("^\\+?assembly$",args)) ) {
+      binJARs <- paste0("scala-",scalaVersions,"/",name,"-assembly-",version,".jar")
+    } else {
+      binJARs <- paste0("scala-",scalaVersions,"/",tolower(name),"_",scalaVersions,"-",version,".jar")
+    }
     pkgHome <- unique(dirname(list.files(".","DESCRIPTION",recursive=TRUE)))   # unique(...) because on Mac OS X, duplicates are possible.
     pkgHome <- pkgHome[!grepl(".*\\.Rcheck",pkgHome)]
     if ( length(pkgHome) > 1 ) {
@@ -81,7 +109,7 @@ scalaSBT <- function(args=c("+package","packageSrc"), copy.to.package=TRUE) {
     unlink(file.path(binDir,oldDirs),recursive=TRUE)
     for ( v in scalaVersions ) {
       currentJARs <- binJARs[grepl(sprintf("^scala-%s",v),binJARs)]
-      currentJARs <- currentJARs[grepl(sprintf(".*_%s-%s.jar$",v,version),basename(currentJARs))]
+      currentJARs <- currentJARs[grepl(sprintf(".*-%s.jar$",version),basename(currentJARs))]
       if ( length(currentJARs) > 0 ) {
         destDir <- file.path(binDir,sprintf("scala-%s",v))
         dir.create(destDir,FALSE,TRUE)
