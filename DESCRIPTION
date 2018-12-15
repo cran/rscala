@@ -1,13 +1,13 @@
 Package: rscala
 Type: Package
 Title: Bridge Between 'R' and 'Scala' with Callbacks
-Version: 3.2.5
-Date: 2018-12-07
+Version: 3.2.6
+Date: 2018-12-15
 Authors@R: person(given="David B.",family="Dahl",role=c("aut","cre"),email="dahl@stat.byu.edu")
 URL: https://github.com/dbdahl/rscala
 BugReports: https://github.com/dbdahl/rscala/issues
 Imports: utils
-SystemRequirements: Scala (>= 2.11)
+SystemRequirements: Scala (>= 2.11), Java (>= 8)
 Description: 'Scala' <http://www.scala-lang.org/> is embedded in 'R' and callbacks from 'Scala' to 'R' are available. Support is provided to write 'R' packages that access 'Scala'. After installation, please run 'rscala::scalaConfig()'.
 Depends: R (>= 3.1.0)
 LazyData: TRUE
@@ -16,8 +16,8 @@ Encoding: UTF-8
 RoxygenNote: 6.1.1
 Suggests: testthat, devtools, rstudioapi
 NeedsCompilation: no
-Packaged: 2018-12-07 17:28:53 UTC; dahl
+Packaged: 2018-12-15 14:05:02 UTC; dahl
 Author: David B. Dahl [aut, cre]
 Maintainer: David B. Dahl <dahl@stat.byu.edu>
 Repository: CRAN
-Date/Publication: 2018-12-08 05:40:02 UTC
+Date/Publication: 2018-12-15 15:30:02 UTC
