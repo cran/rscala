@@ -7,7 +7,8 @@
 \usage{
 scala(JARs = character(), serialize.output = .Platform$OS.type ==
   "windows", stdout = TRUE, stderr = TRUE, port = 0L,
-  heap.maximum = NULL, debug = FALSE)
+  heap.maximum = NULL, command.line.arguments = character(0),
+  debug = FALSE)
 }
 \arguments{
 \item{JARs}{Character vector whose elements are some combination of
@@ -32,6 +33,10 @@ the output.}
 The value here supersedes that from \code{\link{scalaMemory}}. Without this
 being set in either \code{\link{scala}} or \code{\link{scalaMemory}}, the
 heap maximum will be 90\% of the available RAM.}
+
+\item{command.line.arguments}{A character vector of extra command line
+arguments to pass to the Scala executable, where each element corresponds
+to one argument.}
 
 \item{debug}{(Developer use only.)  Logical indicating whether debugging
 should be enabled.}

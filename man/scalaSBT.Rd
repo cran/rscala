@@ -4,14 +4,18 @@
 \alias{scalaSBT}
 \title{Run SBT and Deploy JAR Files}
 \usage{
-scalaSBT(args = c("+package", "packageSrc"), copy.to.package = TRUE)
+scalaSBT(args = c("+package", "packageSrc"), copy.to.package = TRUE,
+  use.cache = TRUE)
 }
 \arguments{
 \item{args}{A character vector giving the arguments to be passed to the SBT
 command.}
 
-\item{copy.to.package}{Should the jars be to the appropriate directories of
-the R package source.}
+\item{copy.to.package}{Should the JARs files be copied to the appropriate
+directories of the R package source?}
+
+\item{use.cache}{Should compilation be avoided if it appears Scala code
+has not changed?}
 }
 \value{
 \code{NULL}

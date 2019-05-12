@@ -29,6 +29,9 @@
 #'   The value here supersedes that from \code{\link{scalaMemory}}. Without this
 #'   being set in either \code{\link{scala}} or \code{\link{scalaMemory}}, the
 #'   heap maximum will be 90\% of the available RAM.
+#' @param command.line.arguments A character vector of extra command line
+#'   arguments to pass to the Scala executable, where each element corresponds
+#'   to one argument.
 #' @param debug (Developer use only.)  Logical indicating whether debugging
 #'   should be enabled.
 #'
@@ -50,13 +53,14 @@
 #' s(mean=h, sd=2, r=rng) * 'mean + sd * r.nextGaussian()'
 #' close(s)
 #' }
-#' 
+#'
 scala <- function(JARs=character(),
                   serialize.output=.Platform$OS.type=="windows",
                   stdout=TRUE,
                   stderr=TRUE,
                   port=0L,
                   heap.maximum=NULL,
+                  command.line.arguments=character(0),
                   debug=FALSE) {
   if ( identical(stdout,TRUE) ) stdout <- ""
   if ( identical(stderr,TRUE) ) stderr <- ""
@@ -74,13 +78,13 @@ scala <- function(JARs=character(),
       sConfig$error <- list(message=paste0("\n\n<<<<<<<<<<\n<<<<<<<<<<\n<<<<<<<<<<\n\nScala version ",sConfig$scalaFullVersion," is not among the support versions: ",paste(names(scalaVersionJARs()),collapse=", "),".\nPlease run 'rscala::scalaConfig(reconfig=TRUE)'\n\n>>>>>>>>>>\n>>>>>>>>>>\n>>>>>>>>>>\n"))
     } else {
       heap.maximum <- getHeapMaximum(heap.maximum,sConfig$javaArchitecture == 32)
-      command.line.options <- if ( is.null(heap.maximum) ) NULL
+      heap.maximum.argument <- if ( is.null(heap.maximum) ) NULL
       else shQuote(paste0("-J-Xmx",heap.maximum))
       sessionFilename <- tempfile("rscala-session-")
       writeLines(character(),sessionFilename)
       portsFilename <- tempfile("rscala-ports-")
-      args <- c(command.line.options,"-nc","-classpath",rscalaJAR,"org.ddahl.rscala.server.Main",rscalaJAR,port,portsFilename,sessionFilename,debug,serialize.output,FALSE)
-      oldJavaEnv <- setJavaEnv(sConfig) 
+      args <- c(heap.maximum.argument,shQuote(command.line.arguments),"-nc","-classpath",rscalaJAR,"org.ddahl.rscala.server.Main",rscalaJAR,port,portsFilename,sessionFilename,debug,serialize.output,FALSE)
+      oldJavaEnv <- setJavaEnv(sConfig)
       system2(sConfig$scalaCmd,args,wait=FALSE,stdout=stdout,stderr=stderr)
       setJavaEnv(oldJavaEnv)
       assign("sessionFilename",sessionFilename,envir=details)
@@ -88,7 +92,7 @@ scala <- function(JARs=character(),
     }
   }
   assign("closed",FALSE,envir=details)
-  assign("disconnected",TRUE,envir=details) 
+  assign("disconnected",TRUE,envir=details)
   assign("pidOfR",Sys.getpid(),envir=details)
   assign("interrupted",FALSE,envir=details)
   transcompileHeader <- c("import org.ddahl.rscala.server.Transcompile._","import scala.util.control.Breaks")
@@ -117,8 +121,10 @@ scala <- function(JARs=character(),
   assign("pullers",new.env(parent=emptyenv()),envir=details)
   scalaPushRegister(scalaPush.generic,"generic",bridge)
   scalaPushRegister(scalaPush.list,"list",bridge)
+  scalaPushRegister(scalaPush.arrayOfMatrices,"arrayOfMatrices",bridge)
   scalaPullRegister(scalaPull.generic,"generic",bridge)
   scalaPullRegister(scalaPull.list,"list",bridge)
+  scalaPullRegister(scalaPull.arrayOfMatrices,"arrayOfMatrices",bridge)
   bridge
 }
 
@@ -144,7 +150,7 @@ mkBridge <- function(details) {
     bridge2
   }
   attr(bridge,"details") <- details
-  class(bridge) <- "rscalaBridge"    
+  class(bridge) <- "rscalaBridge"
   bridge
 }
 
@@ -154,7 +160,7 @@ embeddedR <- function(ports,debug=FALSE) {
   assign("serializeOutput",FALSE,envir=details)
   assign("debug",debug,envir=details)
   assign("socketInPort",ports[1],envir=details)
-  assign("socketOutPort",ports[2],envir=details) 
+  assign("socketOutPort",ports[2],envir=details)
   assign("pendingJARs",character(0),envir=details)
   assign("pendingCallbacks",character(0),envir=details)
   scalaConnect(details)
@@ -178,8 +184,8 @@ scalaConnect <- function(details) {
     unlink(portsFilename)
     rm("portsFilename",envir=details)
     assign("socketInPort",ports[1],envir=details)
-    assign("socketOutPort",ports[2],envir=details) 
-    assign("pidOfScala",ports[3],envir=details) 
+    assign("socketOutPort",ports[2],envir=details)
+    assign("pidOfScala",ports[3],envir=details)
   }
   socketIn  <- socketConnection(host="localhost", port=details[['socketInPort']],  server=FALSE, blocking=TRUE, open="rb", timeout=2678400L)
   socketOut <- socketConnection(host="localhost", port=details[['socketOutPort']], server=FALSE, blocking=TRUE, open="ab", timeout=2678400L)
@@ -208,6 +214,13 @@ osType <- function() {
     else if ( sysname == "Linux" ) "linux"
     else ""
   }
+}
+
+osBit <- function() {
+  if ( identical(.Platform$OS.type,"windows") ) {
+    out <- system2("wmic",c("/locale:ms_409","OS","get","osarchitecture","/VALUE"),stdout=TRUE)
+    if ( any("OSArchitecture=64-bit"==trimws(out)) ) 64 else 32
+  } else if ( identical(system2("uname","-m",stdout=TRUE),"x86_64") ) 64 else 32
 }
 
 getHeapMaximum <- function(heap.maximum,is32bit) {
