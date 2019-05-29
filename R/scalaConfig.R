@@ -10,12 +10,12 @@
 #'   rewritten based on a new search for Scala and Java.  If \code{FALSE}, the
 #'   previous configuration is sourced from the script
 #'   \code{~/.rscala/config.R}.  If \code{"live"}, a new search is performed,
-#'   but the results do not overwrite the previous configuration script.  Finally,
-#'   the value set here is superceded by the value of the environment variable
-#'   \code{RSCALA_RECONFIG}, if it exists.
+#'   but the results do not overwrite the previous configuration script.
+#'   Finally, the value set here is superceded by the value of the environment
+#'   variable \code{RSCALA_RECONFIG}, if it exists.
 #' @param download A character vector which may be length-zero or whose elements
 #'   are any combination of \code{"java"}, \code{"scala"}, or \code{"sbt"}. Or,
-#'   \code{TRUE} denotes all three.  The indicated software will be installed at
+#'   \code{TRUE} denotes all three.  The indicated software will be installed in
 #'   "~/.rscala".
 #' @param require.sbt Should SBT be required, downloading and installing it in
 #'   '~/.rscala/sbt' if necessary?
@@ -43,7 +43,7 @@ scalaConfig <- function(verbose=TRUE, reconfig=FALSE, download=character(0), req
     if ( !identical(reconfig,"live") && interactive() ) {
       while ( TRUE ) {
         cat(msg,"\n")
-        response <- toupper(trimws(readline(prompt="Would you like to install now? [Y/n] ")))
+        response <- toupper(trimws(readline(prompt="Would you like to install/update it now? [Y/n] ")))
         if ( response == "N" ) return(FALSE)
         if ( response %in% c("Y","") ) return(TRUE)
       }
@@ -100,9 +100,6 @@ scalaConfig <- function(verbose=TRUE, reconfig=FALSE, download=character(0), req
       }
       consent <- consent || consent2
     }
-    if ( ( javaConf$javaArchitecture == 32 ) && ( osBit() == 64 ) ) {
-      warning("32-bit Java is paired with a 64-bit operating system.  To access more memory, please run 'scalaConfig(download=\"java\")'.")
-    }
     config <- c(format=4L,scalaConf,javaConf)
     if ( download.sbt ) installSoftware(installPath,"sbt",verbose=verbose)
     sbtSpecifics <- function(x,y) list(sbtCmd=x)
@@ -114,7 +111,7 @@ scalaConfig <- function(verbose=TRUE, reconfig=FALSE, download=character(0), req
       if ( consent2 ) {
         installSoftware(installPath,"sbt",verbose=verbose)
         sbtConf <- findExecutable("sbt","SBT",installPath,sbtSpecifics,verbose)
-        if ( is.null(sbtConf) )  stop(stopMsg)
+        if ( is.null(sbtConf) ) stop(stopMsg)
       } else stop(stopMsg)
       consent <- consent || consent2      
     }
@@ -223,7 +220,7 @@ extractArchive <- function(archivePath, parentDirectory, directoryName) {
 
 #' @importFrom utils download.file
 #' 
-installSoftware <- function(installPath, software, version, os, bit, verbose=FALSE, downloadFailureCount=0, extractFailureCount=0) {
+installSoftware <- function(installPath, software, version, os, arch, verbose=FALSE, downloadFailureCount=0, extractFailureCount=0) {
   sel <- urls$software == software
   if ( missing(version) ) {
     version <- if ( software == "java" ) {
@@ -239,12 +236,14 @@ installSoftware <- function(installPath, software, version, os, bit, verbose=FAL
     os <-  if ( software == "java" ) osType() else "any"
   }
   sel <- sel & (urls$os == os)
-  if ( missing(bit) ) {
-    bit <- if ( software == "java" ) {
-      if ( Sys.getenv("RSCALA_VERIFY_JAVA_BIT","") != "" ) Sys.getenv("RSCALA_VERIFY_JAVA_BIT","") else osBit()
+  if ( missing(arch) ) {
+    arch <- if ( software == "java" ) {
+      if ( Sys.getenv("RSCALA_VERIFY_JAVA_ARCH","") != "" ) Sys.getenv("RSCALA_VERIFY_JAVA_ARCH","") else R.Version()$arch
     } else "any"
   }
-  sel <- sel & (urls$bit == bit)
+  sel <- if ( arch == "any" ) sel else {
+    sel & sapply(urls$arch, function(re) grepl(re,arch))
+  }
   urls2 <- urls[sel, ]
   candidates <- urls2[order(as.numeric(urls2$priority),decreasing=TRUE),"url"]
   if ( verbose ) {
@@ -300,7 +299,7 @@ setJavaEnv <- function(javaConf) {
   if ( oldJAVACMD  == "--unset--" ) oldJAVACMD  <- NULL
   if ( oldJAVAHOME == "--unset--" ) oldJAVAHOME <- NULL
   if ( is.null(javaConf$javaCmd)  ) Sys.unsetenv("JAVACMD")   else Sys.setenv(JAVACMD= javaConf$javaCmd)
-  if ( is.null(javaConf$javaHome) ) Sys.unsetenv("JAVA_HOME") else Sys.setenv(JAVAHOME=javaConf$javaHome)
+  if ( is.null(javaConf$javaHome) ) Sys.unsetenv("JAVA_HOME") else Sys.setenv(JAVA_HOME=javaConf$javaHome)
   list(javaCmd=oldJAVACMD,javaHome=oldJAVAHOME)
 }
 
@@ -314,11 +313,15 @@ scalaSpecifics <- function(scalaCmd,javaConf,verbose) {
   oldJavaEnv <- setJavaEnv(javaConf)
   info <- tryCatch({
     system2(scalaCmd,c("-nobootcp","-nc","-e",shQuote('import util.Properties._; println(Seq(versionNumberString,scalaHome,javaHome).mkString(lineSeparator))')),stdout=TRUE,stderr=FALSE)
-   }, warning=function(e) "")
+  }, warning=function(e) "", error=function(e) "")
   setJavaEnv(oldJavaEnv)
-  fullVersion <- info[1]
-  majorVersion <- scalaMajorVersion(fullVersion)
-  if ( majorVersion == "" ) majorVersion <- "?"
+  if ( is.null(info[1]) || is.na(info[1]) ) {
+    fullVersion <- "?"
+    majorVersion <- "?"
+  } else {
+    fullVersion <- info[1]
+    majorVersion <- scalaMajorVersion(fullVersion)
+  }
   supportedVersions <- names(scalaVersionJARs())
   if ( ( length(supportedVersions) > 0 ) && ! ( majorVersion %in% supportedVersions ) ) paste0("unsupported Scala version: ",majorVersion)
   else {
@@ -336,8 +339,8 @@ verifyDownloads <- function() {
     for ( efc in 0:0 ) {
       Sys.setenv(RSCALA_VERIFY_EXTRACT_FAILURE_COUNT=efc)
       Sys.setenv(RSCALA_VERIFY_JAVA_VERSION=version)
-      Sys.setenv(RSCALA_VERIFY_JAVA_BIT=32)
-      cat(paste0("----------\nefc=",efc,", software='java', version=",version,", bit=32\n"))
+      Sys.setenv(RSCALA_VERIFY_JAVA_ARCH="i386")
+      cat(paste0("----------\nefc=",efc,", software='java', version=",version,", arch=i386\n"))
       scalaConfig(download="java")
       s <- scala()
       cat(s * '"OKAY"',"\n\n")
@@ -348,7 +351,7 @@ verifyDownloads <- function() {
     for ( efc in 0:2 ) {
       Sys.setenv(RSCALA_VERIFY_EXTRACT_FAILURE_COUNT=efc)
       Sys.setenv(RSCALA_VERIFY_JAVA_VERSION=version)
-      Sys.setenv(RSCALA_VERIFY_JAVA_BIT=64)
+      Sys.setenv(RSCALA_VERIFY_JAVA_ARCH="x86_64")
       cat(paste0("----------\nefc=",efc,", software='java', version=",version,"\n"))
       scalaConfig(download="java")
       s <- scala()
@@ -356,7 +359,7 @@ verifyDownloads <- function() {
       close(s)
     }
   }
-  for ( version in c("2.11","2.13.0-RC1","2.12") ) {
+  for ( version in c("2.11","2.13.0-RC2","2.12") ) {
     for ( efc in 0:1 ) {
       Sys.setenv(RSCALA_VERIFY_EXTRACT_FAILURE_COUNT=efc)
       Sys.setenv(RSCALA_VERIFY_SCALA_VERSION=version)
@@ -377,5 +380,5 @@ verifyDownloads <- function() {
       cat("\n")
     }
   }
-  Sys.unsetenv(c("RSCALA_VERIFY_EXTRACT_FAILURE_COUNT","RSCALA_VERIFY_JAVA_VERSION","RSCALA_VERIFY_SCALA_VERSION","RSCALA_VERIFY_SBT_VERSION","RSCALA_VERIFY_JAVA_BIT"))
+  Sys.unsetenv(c("RSCALA_VERIFY_EXTRACT_FAILURE_COUNT","RSCALA_VERIFY_JAVA_VERSION","RSCALA_VERIFY_SCALA_VERSION","RSCALA_VERIFY_SBT_VERSION","RSCALA_VERIFY_JAVA_ARCH"))
 }

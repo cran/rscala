@@ -5,16 +5,16 @@
 \title{Run SBT and Deploy JAR Files}
 \usage{
 scalaSBT(args = c("+package", "packageSrc"), copy.to.package = TRUE,
-  use.cache = TRUE)
+  only.if.newer = TRUE)
 }
 \arguments{
 \item{args}{A character vector giving the arguments to be passed to the SBT
 command.}
 
 \item{copy.to.package}{Should the JARs files be copied to the appropriate
-directories of the R package source?}
+directories of the R package source?'}
 
-\item{use.cache}{Should compilation be avoided if it appears Scala code
+\item{only.if.newer}{Should compilation be avoided if it appears Scala code
 has not changed?}
 }
 \value{
@@ -28,15 +28,14 @@ them to the appropriate directories of the R package source.
 Starting from the current working directory and moving up the file system
 hierarchy as needed, this function searches for the directory containing the
 file \code{'build.sbt'}, the SBT build file. It temporarily changes the
-working directory to this directory. Unless the \code{args} argument is
-overwritten, it then runs \code{sbt +package packageSrc +publishLocal} to
-package the cross-compiled the Scala code, package the source code, and
-publish the JAR files locally. Finally, it optionally copies the JAR files to
-the appropriate directories of the R package source. Specifically, source JAR
-files go into \code{(PKGHOME)/java} and binary JAR files go into
+working directory to this directory. It then runs \code{sbt +package
+packageSrc} to package the cross-compiled the Scala code and package the
+source code. publish the JAR files locally. Finally, it copies the JAR files
+to the appropriate directories of the R package source. Specifically, source
+JAR files go into \code{(PKGHOME)/java} and binary JAR files go into
 \code{(PKGHOME)/inst/java/scala-(VERSION)}, where \code{(PKGHOME)} is the
-package home and \code{(VERSION)} is the major Scala version (e.g., 2.12).
-It is assumed that the package home is a subdirectory of the directory
+package home and \code{(VERSION)} is the major Scala version (e.g., 2.12). It
+is assumed that the package home is a subdirectory of the directory
 containing the \code{'build.sbt'} file.
 
 Note that SBT may give weird errors about not being able to download needed

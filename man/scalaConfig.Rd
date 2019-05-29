@@ -16,13 +16,13 @@ returns a list of details associated with the supplied bridge.}
 rewritten based on a new search for Scala and Java.  If \code{FALSE}, the
 previous configuration is sourced from the script
 \code{~/.rscala/config.R}.  If \code{"live"}, a new search is performed,
-but the results do not overwrite the previous configuration script.  Finally,
-the value set here is superceded by the value of the environment variable
-\code{RSCALA_RECONFIG}, if it exists.}
+but the results do not overwrite the previous configuration script.
+Finally, the value set here is superceded by the value of the environment
+variable \code{RSCALA_RECONFIG}, if it exists.}
 
 \item{download}{A character vector which may be length-zero or whose elements
 are any combination of \code{"java"}, \code{"scala"}, or \code{"sbt"}. Or,
-\code{TRUE} denotes all three.  The indicated software will be installed at
+\code{TRUE} denotes all three.  The indicated software will be installed in
 "~/.rscala".}
 
 \item{require.sbt}{Should SBT be required, downloading and installing it in
