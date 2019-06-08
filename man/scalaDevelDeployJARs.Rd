@@ -13,12 +13,12 @@ scalaDevelDeployJARs(name, root, srcJAR, binJARs)
 
 \item{srcJAR}{The file system path to source JAR file (as a string).}
 
-\item{binJARs}{A named character vector of file system paths, where each name is a Scala major version (e.g., \code{"2.12"}.)}
+\item{binJARs}{A named character vector of file system paths, where each name is a Scala major version (e.g., \code{"2.13"}.)}
 }
 \description{
 This function copies the JAR files to the appropriate directories of the R
 package source. Specifically, source JAR files go into \code{(PKGHOME)/java}
 and binary JAR files go into \code{(PKGHOME)/inst/java/scala-(VERSION)},
 where \code{(PKGHOME)} is the package home and \code{(VERSION)} is the major
-Scala version (e.g., 2.12).
+Scala version (e.g., 2.13).
 }

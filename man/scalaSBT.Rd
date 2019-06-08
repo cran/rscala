@@ -34,7 +34,7 @@ source code. publish the JAR files locally. Finally, it copies the JAR files
 to the appropriate directories of the R package source. Specifically, source
 JAR files go into \code{(PKGHOME)/java} and binary JAR files go into
 \code{(PKGHOME)/inst/java/scala-(VERSION)}, where \code{(PKGHOME)} is the
-package home and \code{(VERSION)} is the major Scala version (e.g., 2.12). It
+package home and \code{(VERSION)} is the major Scala version (e.g., 2.13). It
 is assumed that the package home is a subdirectory of the directory
 containing the \code{'build.sbt'} file.
 
