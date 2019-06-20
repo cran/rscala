@@ -64,7 +64,7 @@ scala <- function(JARs=character(),
                   debug=FALSE) {
   if ( identical(stdout,TRUE) ) stdout <- ""
   if ( identical(stderr,TRUE) ) stderr <- ""
-  debug <- identical(debug,TRUE)
+  debug <- identical(debug,TRUE) || ( if ( Sys.getenv("RSCALA_DEBUG") != "" ) as.logical(Sys.getenv("RSCALA_DEBUG")) else FALSE)
   serialize.output <- identical(serialize.output,TRUE)
   port <- as.integer(port[1])
   if ( debug && serialize.output ) stop("When debug is TRUE, serialize.output must be FALSE.")
@@ -80,11 +80,17 @@ scala <- function(JARs=character(),
       heap.maximum <- getHeapMaximum(heap.maximum,sConfig$javaArchitecture == 32)
       heap.maximum.argument <- if ( is.null(heap.maximum) ) NULL
       else shQuote(paste0("-J-Xmx",heap.maximum))
+      command.line.arguments <- if ( is.null(command.line.arguments) || ( length(command.line.arguments) == 0 ) ) NULL
+      else shQuote(command.line.arguments)
       sessionFilename <- tempfile("rscala-session-")
       writeLines(character(),sessionFilename)
       portsFilename <- tempfile("rscala-ports-")
-      args <- c(heap.maximum.argument,shQuote(command.line.arguments),"-nc","-classpath",rscalaJAR,"org.ddahl.rscala.server.Main",rscalaJAR,port,portsFilename,sessionFilename,debug,serialize.output,FALSE)
+      args <- c(heap.maximum.argument,command.line.arguments,"-nc","-classpath",rscalaJAR,"org.ddahl.rscala.server.Main",rscalaJAR,port,portsFilename,sessionFilename,debug,serialize.output,FALSE)
       oldJavaEnv <- setJavaEnv(sConfig)
+      if ( debug ) {
+        cat(paste0("Cmd:  ",paste0(sConfig$scalaCmd,collapse=" | "),"\n"))
+        cat(paste0("Args: ",paste0(args,collapse=" | "),"\n"))
+      }
       system2(sConfig$scalaCmd,args,wait=FALSE,stdout=stdout,stderr=stderr)
       setJavaEnv(oldJavaEnv)
       assign("sessionFilename",sessionFilename,envir=details)
@@ -229,13 +235,13 @@ getHeapMaximum <- function(heap.maximum,is32bit) {
     outTemp <- gsub("\\s*kB$","",outTemp)
     as.numeric(outTemp) * 1024
   } else if ( os == "windows" ) {
-    outTemp <- system2("wmic",c("/locale:ms_409","OS","get","FreePhysicalMemory","/VALUE"),stdout=TRUE)
+    outTemp <- system2("wmic",c("/locale:ms_409","OS","get","FreePhysicalMemory","/VALUE"),stdout=TRUE,stderr=TRUE)
     outTemp <- outTemp[outTemp != "\r"]
     outTemp <- gsub("^FreePhysicalMemory=","",outTemp)
     outTemp <- gsub("\r","",outTemp)
     as.numeric(outTemp) * 1024
   } else if ( os == "mac" ) {
-    outTemp <- system2("vm_stat",stdout=TRUE)
+    outTemp <- system2("vm_stat",stdout=TRUE,stderr=TRUE)
     outTemp <- outTemp[grepl("(Pages free|Pages inactive|Pages speculative):.*",outTemp)]
     sum(sapply(strsplit(outTemp,":"),function(x) as.numeric(x[2]))) * 4096
   } else NA                                       # Unknown, so do not do anything.
