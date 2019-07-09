@@ -18,7 +18,7 @@ scalaPush(x, method = "generic", bridge = scalaFindBridge(), ...)
 
 \item{x}{An R object.}
 
-\item{bridge}{An rscala bridge.}
+\item{bridge}{A Scala bridge.}
 }
 \description{
 The push function serializes an R object to Scala and the push function does

@@ -18,11 +18,11 @@ JAR files are added to the runtime classpath.}
 \item{serialize.output}{Logical indicating whether Scala output should be
 serialized back to R.  This is slower and probably only needed on Windows.}
 
-\item{stdout}{Whether "standard output" results that are not serialized
-should be sent.  \code{TRUE} or \code{""} sends output to the \R console
-(although that may not work on Windows).  \code{FALSE} or \code{NULL}
-discards the output.  Otherwise, this is the name of the file that receives
-the output.}
+\item{stdout}{When \code{serialize.output == FALSE}, this argument influences
+where "standard output" results should be sent.  \code{TRUE} or \code{""}
+sends output to the \R console (although that may not work on Windows).
+\code{FALSE} or \code{NULL} discards the output.  Otherwise, this is the
+name of the file that receives the output.}
 
 \item{stderr}{Same as \code{stdout}, except influences the "standard error".}
 
@@ -31,7 +31,7 @@ the output.}
 
 \item{heap.maximum}{String giving Scala's heap maximum, e.g., "8G" or "512M".
 The value here supersedes that from \code{\link{scalaMemory}}. Without this
-being set in either \code{\link{scala}} or \code{\link{scalaMemory}}, the
+being set by either \code{\link{scala}} or \code{\link{scalaMemory}}, the
 heap maximum will be 90\% of the available RAM.}
 
 \item{command.line.arguments}{A character vector of extra command line
@@ -42,10 +42,10 @@ to one argument.}
 should be enabled.}
 }
 \value{
-Returns an rscala bridge.
+Returns a Scala bridge.
 }
 \description{
-This function creates an instance of an rscala bridge.  Details on this
+This function creates an instance of a Scala bridge.  Details on this
 function (and the rscala package as a whole) are provided in the package
 vignette and the associated paper in the \emph{Journal of Statistical
 Software}. See the reference below.
@@ -72,7 +72,7 @@ close(s)
 
 }
 \references{
-{David B. Dahl (2018). “Integration of R and Scala Using rscala.”
+{David B. Dahl (2019). "Integration of R and Scala Using rscala."
   Journal of Statistical Software, in editing. https://www.jstatsoft.org}
 }
 \seealso{

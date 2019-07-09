@@ -7,15 +7,15 @@
 scalaLazy(functions, bridge = scalaFindBridge())
 }
 \arguments{
-\item{functions}{A single function or list of functions.  Each function takes a Scala bridge as its only argument.
-These functions are called immediately after the next time the bridge is connected.
-These functions are where setup code should go, like \emph{global}
-imports, objects, classes, methods, etc.  For example, it might equal
-\code{function(s) { s + 'import scala.util.Random' }}.  \strong{Note} the
-use of the declaration operator \code{+} instead of the operators \code{*}
-or \code{^}.}
+\item{functions}{A single function or list of functions.  Each function takes
+a Scala bridge as its only argument. These functions are called immediately
+after the next time the bridge is connected. These functions are where
+setup code should go, like \emph{global} imports, objects, classes,
+methods, etc.  For example, it might equal \code{function(s) { s + 'import
+scala.util.Random' }}.  \strong{Note} the use of the declaration operator
+\code{+} instead of the operators \code{*} or \code{^}.}
 
-\item{bridge}{An rscala bridge from the \code{scala} function.}
+\item{bridge}{A Scala bridge from the \code{scala} function.}
 }
 \value{
 Returns \code{NULL}, invisibly.
@@ -25,12 +25,12 @@ Lazily Execute Functions on a Scala Bridge
 }
 \examples{
 \donttest{
-
 s <- scala()
 scalaLazy(function(s) { s + 'import scala.util.Random' })
 s$.new_Random()$nextDouble()
 close(s)
 }
+
 }
 \seealso{
 \code{\link{scalaFindBridge}}

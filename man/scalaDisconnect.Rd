@@ -7,10 +7,10 @@
 scalaDisconnect(bridge = scalaFindBridge())
 }
 \arguments{
-\item{bridge}{An rscala bridge.}
+\item{bridge}{A Scala bridge.}
 }
 \description{
-This function temporarily disconnects an rscala bridge by closing its
+This function temporarily disconnects a Scala bridge by closing its
 associated socket connections.  The primary place where this function is used
 is at the end of examples of packages that depend on rscala (because, under
 some versions of R, "\code{R CMD check --as-cran}" does not permit
@@ -18,7 +18,6 @@ connections to persist after an example ends).
 }
 \examples{
 \donttest{
-
 showConnections()
 s <- scala()
 showConnections()         # No additional connections yet.
@@ -30,4 +29,5 @@ s * "3+4"
 showConnections()         # New connections are established as needed.
 close(s)
 }
+
 }

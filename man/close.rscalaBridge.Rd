@@ -7,7 +7,7 @@
 \method{close}{rscalaBridge}(con, ...)
 }
 \arguments{
-\item{con}{An rscala bridge.}
+\item{con}{A Scala bridge.}
 
 \item{...}{Currently ignored.}
 }

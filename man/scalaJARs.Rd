@@ -11,7 +11,7 @@ scalaJARs(JARs, bridge = scalaFindBridge())
 individual JAR files or package names which contain embedded JARs.  These
 JAR files are added to the runtime classpath.}
 
-\item{bridge}{An rscala bridge from the \code{scala} function.
+\item{bridge}{A Scala bridge from the \code{scala} function.
 
 If the \code{JARs} argument is missing, a character vector of loaded JARs
 is returned.}
@@ -24,9 +24,9 @@ Add JAR Files to Classpath
 }
 \examples{
 \dontrun{
-
 scalaJARs("PATH/TO/jarFileToLoad.jar", e)
 }
+
 }
 \seealso{
 \code{\link{scalaFindBridge}}

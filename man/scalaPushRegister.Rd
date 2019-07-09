@@ -15,7 +15,7 @@ Other arguments can be used as additional arguments.}
 
 \item{method}{A string giving the name of the specific 'push' or 'pull' method.}
 
-\item{bridge}{An rscala bridge.}
+\item{bridge}{A Scala bridge.}
 
 \item{puller}{A function whose first two arguments are as shown in the example below.
 Other arguments can be used as additional arguments.}

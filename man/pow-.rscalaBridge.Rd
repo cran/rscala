@@ -7,7 +7,7 @@
 \method{^}{rscalaBridge}(bridge, snippet)
 }
 \arguments{
-\item{bridge}{An rscala bridge.}
+\item{bridge}{A Scala bridge.}
 
 \item{snippet}{String providing a Scala code snippet.}
 }

@@ -7,10 +7,10 @@
 scalaLast(bridge = scalaFindBridge())
 }
 \arguments{
-\item{bridge}{An rscala bridge}
+\item{bridge}{A Scala bridge}
 }
 \description{
-This function retrieves the last result from the supplied rscala bridge.
+This function retrieves the last result from the supplied Scala bridge.
 }
 \examples{
 \donttest{

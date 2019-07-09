@@ -9,7 +9,7 @@ scalaConfig(verbose = TRUE, reconfig = FALSE,
 }
 \arguments{
 \item{verbose}{Should details of the search for Scala and Java be provided?
-Or, if an rscala bridge is provided instead of a logical, the function
+Or, if a Scala bridge is provided instead of a logical, the function
 returns a list of details associated with the supplied bridge.}
 
 \item{reconfig}{If \code{TRUE}, the script \code{~/.rscala/config.R} is
@@ -37,11 +37,11 @@ directory.
 }
 \examples{
 \donttest{
-
 scalaConfig()
 }
+
 }
 \references{
-{David B. Dahl (2018). “Integration of R and Scala Using rscala.”
+{David B. Dahl (2019). "Integration of R and Scala Using rscala."
   Journal of Statistical Software, in editing. https://www.jstatsoft.org}
 }

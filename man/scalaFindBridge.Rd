@@ -11,9 +11,9 @@ scalaFindBridge(reference = NULL)
 case the environment path is searched).}
 }
 \value{
-An rscala bridge.
+A Scala bridge.
 }
 \description{
-This function attempts to find an instance of an rscala bridge based on an
+This function attempts to find an instance of a Scala bridge based on an
 rscala reference or by searching the environment path.
 }

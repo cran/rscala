@@ -4,7 +4,7 @@
 #' directory.
 #'
 #' @param verbose Should details of the search for Scala and Java be provided?
-#'   Or, if an rscala bridge is provided instead of a logical, the function
+#'   Or, if a Scala bridge is provided instead of a logical, the function
 #'   returns a list of details associated with the supplied bridge.
 #' @param reconfig If \code{TRUE}, the script \code{~/.rscala/config.R} is
 #'   rewritten based on a new search for Scala and Java.  If \code{FALSE}, the
@@ -21,13 +21,13 @@
 #'   '~/.rscala/sbt' if necessary?
 #'
 #' @return Returns a list of details of the Scala and Java binaries.
-#' @references {David B. Dahl (2018). “Integration of R and Scala Using rscala.”
+#' @references {David B. Dahl (2019). "Integration of R and Scala Using rscala."
 #'   Journal of Statistical Software, in editing. https://www.jstatsoft.org}
 #' @export
 #' @examples \donttest{
-#'
 #' scalaConfig()
 #' }
+#' 
 scalaConfig <- function(verbose=TRUE, reconfig=FALSE, download=character(0), require.sbt=FALSE) {
   if ( inherits(verbose,"rscalaBridge") ) return(attr(verbose,"details")$config)
   if ( ( length(download) > 0 ) && ( download == TRUE ) ) download <- c("java","scala","sbt")
@@ -264,6 +264,8 @@ extractArchive <- function(archivePath, parentDirectory, directoryName) {
   status <- file.rename(home, finalPath)
   if ( ! status ) stop(paste0("Problem renaming ", home, " to ", finalPath))
   unlink(tmpInstallDirectory, TRUE, TRUE)
+  filesInBin <- list.files(file.path(finalPath,"bin"),full.names=TRUE)
+  Sys.chmod(filesInBin, "0755")
   finalPath
 }
 
@@ -305,7 +307,7 @@ installSoftware <- function(installPath, software, version, os, arch, verbose=FA
   dfc <- efc <- 0
   for ( candidate in candidates ) {
     archivePath <- file.path(tempdir(), basename(candidate))
-    result <- try(download.file(candidate, archivePath), silent=TRUE)
+    result <- try(download.file(candidate, archivePath, mode="wb"), silent=TRUE)
     if ( inherits(result,"try-error") || ( result != 0 ) || ( dfc < downloadFailureCount ) ) {
       dfc <- dfc + 1
       next

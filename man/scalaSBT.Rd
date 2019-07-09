@@ -21,8 +21,9 @@ has not changed?}
 \code{NULL}
 }
 \description{
-This function runs SBT (Scala Build Tool) to package JAR files and then copy
-them to the appropriate directories of the R package source.
+This function helps developers of packages based on rscala. It runs SBT
+(Scala Build Tool) to package JAR files and then copy them to the appropriate
+directories of the R package source.
 }
 \details{
 Starting from the current working directory and moving up the file system
@@ -43,4 +44,10 @@ dependences.  The issue is that some OpenJDK builds less than version 10 do
 not include root certificates.  The solution is to either: i. manually
 install OpenJDK version 10 or greater, or ii. manually install Oracle's
 version of Java. Both are capable with the rscala package.
+}
+\examples{
+\dontrun{
+scalaSBT()  # Working directory is the root of a package based on rscala.
+}
+
 }

@@ -1,7 +1,8 @@
 #' Run SBT and Deploy JAR Files
 #'
-#' This function runs SBT (Scala Build Tool) to package JAR files and then copy
-#' them to the appropriate directories of the R package source.
+#' This function helps developers of packages based on rscala. It runs SBT
+#' (Scala Build Tool) to package JAR files and then copy them to the appropriate
+#' directories of the R package source.
 #'
 #' Starting from the current working directory and moving up the file system
 #' hierarchy as needed, this function searches for the directory containing the
@@ -28,10 +29,14 @@
 #'   directories of the R package source?'
 #' @param only.if.newer Should compilation be avoided if it appears Scala code
 #'   has not changed?
-#
-#' 
+#'
+#' @examples \dontrun{
+#' scalaSBT()  # Working directory is the root of a package based on rscala.
+#' }
+#'
 #' @return \code{NULL}
 #' @export
+#' 
 scalaSBT <- function(args=c("+package","packageSrc"), copy.to.package=TRUE, only.if.newer=TRUE) {
   if ( ( ! is.vector(args) ) || ( ! is.character(args) ) ) stop("'args' is mispecified.")
   sConfig <- scalaConfig(FALSE,require.sbt=TRUE)
@@ -82,41 +87,6 @@ scalaSBT <- function(args=c("+package","packageSrc"), copy.to.package=TRUE, only
     scalaDevelDeployJARs(info$name, info$packageRoot, srcJAR, binJARs)
   }
   invisible(NULL)
-}
-
-#' Deploy JAR Files into the Package File System
-#'
-#' This function copies the JAR files to the appropriate directories of the R
-#' package source. Specifically, source JAR files go into \code{(PKGHOME)/java}
-#' and binary JAR files go into \code{(PKGHOME)/inst/java/scala-(VERSION)},
-#' where \code{(PKGHOME)} is the package home and \code{(VERSION)} is the major
-#' Scala version (e.g., 2.13).
-#'
-#' @param name The package name (as a string).
-#' @param root The file system path to package root directory (as a string).
-#' @param srcJAR The file system path to source JAR file (as a string).
-#' @param binJARs A named character vector of file system paths, where each name is a Scala major version (e.g., \code{"2.13"}.)
-#'
-#' @export
-scalaDevelDeployJARs <- function(name, root, srcJAR, binJARs) {
-  if ( missing(name) || ( ! is.vector(name) ) || ( ! is.character(name) ) || ( length(name) != 1 ) || ( name == "" ) ) stop("'name' is mispecified.")
-  if ( missing(root) || ( ! is.vector(root) ) || ( ! is.character(root) ) || ( length(root) != 1 ) || ( ! dir.exists(root) ) ) stop("'root' directory does not exist.")
-  if ( ! file.exists(file.path(root,"DESCRIPTION")) ) stop("'root' does not appear to be a package root directory.")
-  if ( missing(srcJAR) || ( ! is.vector(srcJAR) ) || ( ! is.character(srcJAR) ) || ( length(srcJAR) != 1 ) ) stop("'srcJAR' must be a path to JAR file.")
-  if ( ! file.exists(srcJAR) ) stop("'srcJAR' does not exists in the file system.")
-  if ( missing(binJARs) || ( ! is.vector(binJARs) ) || ( ! is.character(binJARs) || ( length(binJARs) == 0 ) || is.null(names(binJARs))) ) stop("'binJARs' must be a named vector of paths to JAR files.")
-  if ( ! all(file.exists(binJARs)) ) stop("'binJARs' has elements that do not exists in the file system.")
-  binDir <- file.path(root,"inst","java")
-  for ( index in seq_along(binJARs) ) {
-    v <- scalaMajorVersion(names(binJARs)[index])
-    destDir <- file.path(binDir,sprintf("scala-%s",v))
-    dir.create(destDir,FALSE,TRUE)
-    file.copy(binJARs[index],file.path(destDir,paste0(name,".jar")),TRUE)
-  }
-  srcDir <- file.path(root,"java")
-  dir.create(srcDir,FALSE,TRUE)
-  file.copy(srcJAR,file.path(srcDir,paste0(name,"-source.jar")),TRUE)
-  invisible()
 }
 
 #' @importFrom utils compareVersion
@@ -171,32 +141,6 @@ scalaDevelInfo <- function() {
   name <- as.vector(read.dcf(file.path(packageRoot,"DESCRIPTION"),"Package"))
   list(name=name, projectRoot=getwd(), packageRoot=packageRoot, buildSystem=buildSystem)
 }
-
-# # Probably broken
-# mill <- function(args,stderr=FALSE) {
-#   outString <- system2("mill",args,stdout=TRUE,stderr=stderr)
-#   gsub('^\\s*"(.*)"\\s*$',"\\1",outString) 
-# }
-# 
-# # Probably broken
-# scalaDevelBuildJARs <- function(info=scalaDevelInfo()) {
-#   oldWD <- getwd()
-#   on.exit(setwd(normalizePath(oldWD,mustWork=FALSE)))
-#   if ( is.null(info$projectRoot) ) stop("Cannot find project root.")
-#   setwd(info$projectRoot)
-#   if ( is.null(info$buildSystem) ) stop("No build system detected.")
-#   result <- if ( info$buildSystem == "mill" ) {
-#     scalaVersions <- mill(c("show","scala[_].scalaVersion"))
-#     srcScalaVersion <- pickLatestStableScalaVersion(scalaVersions)
-#     binJARs <- gsub('^ref:[^:]*:(.*)$',"\\1",mill(c("show","scala[_].jar")))
-#     srcJAR <- gsub('^ref:[^:]*:(.*)$',"\\1",mill(c("show",paste0("scala[",srcScalaVersion,"].sourceJar"))))
-#     names(binJARs) <- scalaVersions
-#     list(binJARs=binJARs, srcJAR=srcJAR)
-#   } else if ( info$buildSystem == "sbt" ) {
-#     stop("Not yet implemented.")
-#   } else stop(paste0("Unrecognized build system: ",info$buildSystem))
-#   result
-# }
 
 scalaFindLatestJARs <- function(dir, version2Path, jarFilter, majorVersions) {
   oldWD <- getwd()
