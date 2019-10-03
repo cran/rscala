@@ -11,9 +11,11 @@ scala(JARs = character(), serialize.output = .Platform$OS.type ==
   debug = FALSE)
 }
 \arguments{
-\item{JARs}{Character vector whose elements are some combination of
-individual JAR files or package names which contain embedded JARs.  These
-JAR files are added to the runtime classpath.}
+\item{JARs}{Character vector describing JAR files to include in the
+classpath. Elements are some combination of file paths to JARs or package
+names which contain embedded JARs.  In the case of package names, the
+embedded JARs of all packages that recursively depend on, import, or
+suggest the specified package are also included.}
 
 \item{serialize.output}{Logical indicating whether Scala output should be
 serialized back to R.  This is slower and probably only needed on Windows.}

@@ -20,13 +20,8 @@ is returned.}
 Returns \code{NULL}, invisibly.
 }
 \description{
-Add JAR Files to Classpath
-}
-\examples{
-\dontrun{
-scalaJARs("PATH/TO/jarFileToLoad.jar", e)
-}
-
+This function is no longer needed but remains until all packages based on
+\pkg{rscala} are updated.  It does *not* affect the classpath.
 }
 \seealso{
 \code{\link{scalaFindBridge}}

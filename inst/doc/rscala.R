@@ -1,5 +1,4 @@
 ### R code from vignette source 'rscala.Rnw'
-### Encoding: UTF-8
 
 ###################################################
 ### code chunk number 1: Setup document
@@ -284,11 +283,10 @@ names(rscala::scalaVersionJARs())
 
 
 ###################################################
-### code chunk number 35: Piggy-back on another package (yet still add your JAR files) (eval = FALSE)
+### code chunk number 35: Piggy-back on another package (eval = FALSE)
 ###################################################
 ## .onLoad <- function(libname, pkgname) {
-##   s <- sdols:::s
-##   scalaJARs(pkgname, s)
+##   s <- pkg1:::s
 ##   assign("s", envir = parent.env(environment()))
 ## }
 
