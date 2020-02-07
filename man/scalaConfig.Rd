@@ -4,8 +4,12 @@
 \alias{scalaConfig}
 \title{Configure Scala and Java}
 \usage{
-scalaConfig(verbose = TRUE, reconfig = FALSE,
-  download = character(0), require.sbt = FALSE)
+scalaConfig(
+  verbose = TRUE,
+  reconfig = FALSE,
+  download = character(0),
+  require.sbt = FALSE
+)
 }
 \arguments{
 \item{verbose}{Should details of the search for Scala and Java be provided?
@@ -17,6 +21,8 @@ rewritten based on a new search for Scala and Java.  If \code{FALSE}, the
 previous configuration is sourced from the script
 \code{~/.rscala/config.R}.  If \code{"live"}, a new search is performed,
 but the results do not overwrite the previous configuration script.
+\code{"offline"} is the same as \code{"live"}, except no software is ever
+downloaded.
 Finally, the value set here is superceded by the value of the environment
 variable \code{RSCALA_RECONFIG}, if it exists.}
 

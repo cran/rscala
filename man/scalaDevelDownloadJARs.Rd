@@ -4,8 +4,11 @@
 \alias{scalaDevelDownloadJARs}
 \title{Download and Deploy JAR Files into the Package File System}
 \usage{
-scalaDevelDownloadJARs(description, scalaMajorVersion = "",
-  prefix = "https://search.maven.org/remotecontent?filepath=")
+scalaDevelDownloadJARs(
+  description,
+  scalaMajorVersion = "",
+  prefix = "https://search.maven.org/remotecontent?filepath="
+)
 }
 \arguments{
 \item{description}{A character vector describing the JAR files to download,

@@ -5,10 +5,16 @@
 \alias{rscala-package}
 \title{Instantiate a Scala Bridge}
 \usage{
-scala(JARs = character(), serialize.output = .Platform$OS.type ==
-  "windows", stdout = TRUE, stderr = TRUE, port = 0L,
-  heap.maximum = NULL, command.line.arguments = character(0),
-  debug = FALSE)
+scala(
+  JARs = character(),
+  serialize.output = .Platform$OS.type == "windows",
+  stdout = TRUE,
+  stderr = TRUE,
+  port = 0L,
+  heap.maximum = NULL,
+  command.line.arguments = character(0),
+  debug = FALSE
+)
 }
 \arguments{
 \item{JARs}{Character vector describing JAR files to include in the

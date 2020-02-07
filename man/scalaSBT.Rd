@@ -4,8 +4,11 @@
 \alias{scalaSBT}
 \title{Run SBT and Deploy JAR Files}
 \usage{
-scalaSBT(args = c("+package", "packageSrc"), copy.to.package = TRUE,
-  only.if.newer = TRUE)
+scalaSBT(
+  args = c("+package", "packageSrc"),
+  copy.to.package = TRUE,
+  only.if.newer = TRUE
+)
 }
 \arguments{
 \item{args}{A character vector giving the arguments to be passed to the SBT
