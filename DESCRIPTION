@@ -1,14 +1,14 @@
 Package: rscala
 Type: Package
 Title: Bridge Between 'R' and 'Scala' with Callbacks
-Version: 3.2.17
-Date: 2020-02-06
+Version: 3.2.18
+Date: 2020-02-17
 Authors@R: person(given="David B.",family="Dahl",role=c("aut","cre"),email="dahl@stat.byu.edu")
 URL: https://github.com/dbdahl/rscala
 BugReports: https://github.com/dbdahl/rscala/issues
 Imports: utils
 SystemRequirements: Scala (>= 2.11), Java (>= 8)
-Description: 'Scala' <http://www.scala-lang.org/> is embedded in 'R' and callbacks from 'Scala' to 'R' are available. Support is provided to write 'R' packages that access 'Scala'. After installation, please run 'rscala::scalaConfig()'.
+Description: 'Scala' <http://www.scala-lang.org/> is embedded in 'R' and callbacks from 'Scala' to 'R' are available. Support is provided to write 'R' packages that access 'Scala'. After installation, please run 'rscala::scalaConfig()'.  The vignette provides an update of the original paper <doi:10.18637/jss.v092.i04>.
 Depends: R (>= 3.1.0)
 LazyData: TRUE
 License: Apache License 2.0 | file LICENSE
@@ -17,8 +17,8 @@ RoxygenNote: 7.0.2
 Suggests: knitr, testthat, devtools, rstudioapi, processx
 VignetteBuilder: knitr
 NeedsCompilation: no
-Packaged: 2020-02-06 20:41:17 UTC; dahl
+Packaged: 2020-02-17 14:36:03 UTC; dahl
 Author: David B. Dahl [aut, cre]
 Maintainer: David B. Dahl <dahl@stat.byu.edu>
 Repository: CRAN
-Date/Publication: 2020-02-07 06:30:18 UTC
+Date/Publication: 2020-02-17 19:00:14 UTC
