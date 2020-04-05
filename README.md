@@ -31,7 +31,7 @@ install the package. Simply add the following line to the your SBT build.sbt
 file:
 
 ```scala
-libraryDependencies += "org.ddahl" %% "rscala" % "3.2.18"
+libraryDependencies += "org.ddahl" %% "rscala" % "3.2.19"
 ```
 
 
@@ -71,7 +71,7 @@ example(scala)
 R extensions can be written using this package, as demonstrated by these
 packages:
 
-* [sdols](https://CRAN.R-project.org/package=sdols)
+* [aibd](https://CRAN.R-project.org/package=aibd)
 * [shallot](https://CRAN.R-project.org/package=shallot)
 * [bamboo](https://CRAN.R-project.org/package=bamboo)
 

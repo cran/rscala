@@ -19,7 +19,39 @@
 \alias{stR2}
 \alias{stS2}
 \title{Get or Specify a Scala Type}
-\format{See 'Value' below.}
+\format{
+See 'Value' below.
+
+An object of class \code{rscalaType} of length 1.
+
+An object of class \code{rscalaType} of length 1.
+
+An object of class \code{rscalaType} of length 1.
+
+An object of class \code{rscalaType} of length 1.
+
+An object of class \code{rscalaType} of length 1.
+
+An object of class \code{rscalaType} of length 1.
+
+An object of class \code{rscalaType} of length 1.
+
+An object of class \code{rscalaType} of length 1.
+
+An object of class \code{rscalaType} of length 1.
+
+An object of class \code{rscalaType} of length 1.
+
+An object of class \code{rscalaType} of length 1.
+
+An object of class \code{rscalaType} of length 1.
+
+An object of class \code{rscalaType} of length 1.
+
+An object of class \code{rscalaType} of length 1.
+
+An object of class \code{rscalaType} of length 1.
+}
 \usage{
 scalaType(type)
 
