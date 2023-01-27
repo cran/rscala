@@ -1,3 +1,6 @@
+3.2.21 (2023-01-27)
+  * Fixed problem finding available memory on Windows.
+
 3.2.19 (2020-04-04)
   * Delete deprecated function 'scalaJARs'.
   * Updated vignette to reflect latest methodologies of shallot and bamboo

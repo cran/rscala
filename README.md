@@ -33,7 +33,16 @@ file:
 ```scala
 libraryDependencies += "org.ddahl" %% "rscala" % "3.2.19"
 ```
-
+Or if you're managing dependencies with Maven, you may add the following to
+ your `pom.xml` file, replacing the version numbers for Scala and for this 
+library as appropriate.
+```xml
+<dependency>
+    <groupId>org.ddahl</groupId>
+    <artifactId>rscala_2.13</artifactId>
+    <version>3.2.19</version>
+</dependency>
+```
 
 ## Usage guides
 
@@ -47,8 +56,8 @@ The citation information is available using:
 citation("rscala")
 ```
 
-An [updated version of the paper](https://dahl.byu.edu/public/rscala/rscala.pdf)
-is available [here](https://dahl.byu.edu/public/rscala/rscala.pdf)
+An [updated version of the paper](https://cran.r-project.org/package=rscala/vignettes/rscala.pdf)
+is available [here](https://cran.r-project.org/package=rscala/vignettes/rscala.pdf)
 or as a vignette in R (once the package is installed):
 
 ```R
@@ -71,15 +80,15 @@ example(scala)
 R extensions can be written using this package, as demonstrated by these
 packages:
 
-* [aibd](https://CRAN.R-project.org/package=aibd)
-* [shallot](https://CRAN.R-project.org/package=shallot)
-* [bamboo](https://CRAN.R-project.org/package=bamboo)
+* [aibd](https://cran.r-project.org/package=aibd)
+* [shallot](https://cran.r-project.org/package=shallot)
+* [bamboo](https://cran.r-project.org/package=bamboo)
 
 
 ## Resources
 
-* [Vignette](https://dahl.byu.edu/public/rscala/rscala.pdf) describing the package usage.
+* [Vignette](https://cran.r-project.org/package=rscala/vignettes/rscala.pdf) describing the package usage.
 * [Git repository](https://github.com/dbdahl/rscala) containing source code and build & test scripts.
-* [Scaladoc](https://dahl.byu.edu/public/rscala/doc/org/ddahl/rscala/RClient.html) for RClient class to access R from Scala.
-* [Package on CRAN](https://CRAN.R-project.org/package=rscala).
+* [Scaladoc](https://dahl.byu.edu/rscala/org/ddahl/rscala/RClient.html) for RClient class to access R from Scala.
+* [Package on CRAN](https://cran.R-project.org/package=rscala).
 
